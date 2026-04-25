@@ -189,27 +189,39 @@ export class Lobby {
    * Admin: nuke any in-progress hand and force-evict every seated player,
    * crediting their stacks back to their wallets. Returns the list of
    * playerIds that were cleared.
+   *
+   * Done in two passes: (1) synchronously empty every seat and cancel any
+   * disconnect timers so the table is *immediately* clear, then (2) credit
+   * wallets in parallel. A slow DB on one credit must never leave seats
+   * occupied.
    */
   async adminForceClear(tableId: string): Promise<number[]> {
     const table = this.tables.get(tableId);
     if (!table) throw new Error("table not found");
     table.abortHand();
-    const cleared: number[] = [];
+    // Pass 1 — synchronous seat eviction.
+    const refunds: Array<{ playerId: number; stack: number }> = [];
     for (const seat of table.seats) {
       if (seat.playerId === null) continue;
       const playerId = seat.playerId;
+      table.cancelDisconnectTimer(playerId);
       const stack = table.removeSeat(seat);
-      if (stack > 0) {
-        try {
-          await creditWallet(playerId, stack);
-        } catch (err) {
-          console.error("[lobby] adminForceClear credit failed:", err);
-        }
-      }
-      cleared.push(playerId);
+      refunds.push({ playerId, stack });
     }
+    // Pass 2 — credit wallets in parallel, swallow per-credit failures.
+    await Promise.all(
+      refunds
+        .filter((r) => r.stack > 0)
+        .map(async (r) => {
+          try {
+            await creditWallet(r.playerId, r.stack);
+          } catch (err) {
+            console.error("[lobby] adminForceClear credit failed:", err);
+          }
+        }),
+    );
     invalidateLeaderboardCache();
-    return cleared;
+    return refunds.map((r) => r.playerId);
   }
 
   async rebuy(args: {

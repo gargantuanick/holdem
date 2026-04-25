@@ -27,6 +27,11 @@ export function LobbyPage() {
     getSocket().emit("admin:clearTable", { tableId }, (res) => {
       if (res.ok) {
         refresh();
+        if (res.cleared === 0) {
+          alert(
+            "Server reported 0 seats cleared. The deploy may not be live yet — wait a minute and try again.",
+          );
+        }
       } else {
         alert(`Clear failed: ${res.error}`);
       }

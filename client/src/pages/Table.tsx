@@ -27,6 +27,13 @@ export function TablePage() {
     return () => clearInterval(id);
   }, []);
 
+  // Pull current state on mount — the initial state emit from table:join
+  // can race with the navigate→mount→subscribe cycle.
+  useEffect(() => {
+    if (!tableId) return;
+    getSocket().emit("table:requestState", { tableId });
+  }, [tableId]);
+
   // Track unseen chat
   useEffect(() => {
     if (!chatOpen && chat.length > 0) {

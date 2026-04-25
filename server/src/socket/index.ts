@@ -201,6 +201,12 @@ export function registerSocketHandlers(
       }
     });
 
+    sock.on("table:requestState", ({ tableId }) => {
+      const table = lobby.getTable(tableId);
+      if (!table) return;
+      sock.emit("table:state", table.publicState(sock.data.playerId));
+    });
+
     sock.on("table:sitOut", ({ tableId, sittingOut }) => {
       if (!sock.data.playerId) return;
       const table = lobby.getTable(tableId);

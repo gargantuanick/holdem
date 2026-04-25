@@ -130,6 +130,7 @@ export interface ClientToServerEvents {
     cb: (res: { ok: true } | { ok: false; error: string }) => void,
   ) => void;
   "table:sitOut": (args: { tableId: string; sittingOut: boolean }) => void;
+  "table:requestState": (args: { tableId: string }) => void;
   "table:action": (args: { tableId: string; action: PlayerAction }) => void;
   "table:chat": (args: { tableId: string; message: string }) => void;
   "table:showCards": (args: { tableId: string }) => void;

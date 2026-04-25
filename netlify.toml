@@ -1,0 +1,12 @@
+[build]
+  base    = "client"
+  command = "npm install --prefix .. && npm run build --workspace=@holdem/shared && npm run build"
+  publish = "client/dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+[[redirects]]
+  from   = "/*"
+  to     = "/index.html"
+  status = 200

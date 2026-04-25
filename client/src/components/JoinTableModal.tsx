@@ -32,6 +32,12 @@ export function JoinTableModal({
     getSocket().emit("table:join", { tableId: table.id, buyIn }, (res) => {
       setBusy(false);
       if (!res.ok) {
+        // If we're already at the table from a prior session/device,
+        // skip the buy-in and just go to the table page.
+        if (res.error === "already at this table") {
+          onJoined();
+          return;
+        }
         setError(res.error);
       } else {
         onJoined();

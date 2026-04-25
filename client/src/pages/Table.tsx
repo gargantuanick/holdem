@@ -34,6 +34,14 @@ export function TablePage() {
     getSocket().emit("table:requestState", { tableId });
   }, [tableId]);
 
+  // If no state arrives within 3s, the table doesn't exist (e.g. server
+  // restart wiped in-memory state). Bounce back to lobby.
+  useEffect(() => {
+    if (state) return;
+    const id = setTimeout(() => navigate("/lobby", { replace: true }), 3000);
+    return () => clearTimeout(id);
+  }, [state, navigate]);
+
   // Track unseen chat
   useEffect(() => {
     if (!chatOpen && chat.length > 0) {

@@ -128,13 +128,13 @@ Coverage:
 - Profile modal (clickable usernames at table + leaderboard)
 - Leaderboard with three tabs (wallet/won/hands_won), 60s cache
 - Wallet/card/chip animations
-- Render + Netlify deploy configs
+- Railway + Netlify deploy configs
 
 **Known limitations / TODO:**
 - No spectator mode; only seated players see a table.
 - No collusion detection or anti-cheat heuristics.
 - Single-server only — no horizontal scaling. State lives in memory, so a server restart drops in-progress hands (each hand ends and stats are persisted only at end-of-hand).
-- Render free-tier server sleeps after 15 min idle. First request after sleep takes ~30s to wake — the client shows a loading state. Acceptable for hobby use.
+- Railway free tier has a monthly execution-time cap; if exceeded the server stops until the next cycle. The client tolerates disconnects (Socket.IO auto-reconnects).
 - No private tables / invite codes; all tables are public.
 - No tournament / sit-and-go formats.
 - "Show cards" is server-side flagged but UI affordance is minimal — winners auto-show; losers can opt to show via socket event but no UI button is wired into the current build.

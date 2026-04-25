@@ -20,6 +20,19 @@ export function LobbyPage() {
     getSocket().emit("lobby:list", (list) => setTables(list));
   }, []);
 
+  const isAdmin = profile?.username === "nk";
+
+  const clearTable = (tableId: string) => {
+    if (!confirm("Clear all seats at this table?")) return;
+    getSocket().emit("admin:clearTable", { tableId }, (res) => {
+      if (res.ok) {
+        refresh();
+      } else {
+        alert(`Clear failed: ${res.error}`);
+      }
+    });
+  };
+
   useEffect(() => {
     refresh();
     const id = setInterval(refresh, 4000);
@@ -121,24 +134,37 @@ export function LobbyPage() {
               <div className="text-center text-white/40 py-8">No tables yet</div>
             )}
             {tables.map((t) => (
-              <button
+              <div
                 key={t.id}
-                onClick={() => setJoining(t)}
-                className="w-full text-left rounded-xl bg-white/5 hover:bg-white/10 active:bg-white/15 border border-white/10 p-3 flex items-center justify-between gap-3"
+                className="rounded-xl bg-white/5 border border-white/10 flex items-stretch"
               >
-                <div>
-                  <div className="font-semibold">{t.name}</div>
-                  <div className="text-xs text-white/60">
-                    {t.smallBlind}/{t.bigBlind} blinds · buy-in {t.minBuyIn}–{t.maxBuyIn}
+                <button
+                  onClick={() => setJoining(t)}
+                  className="flex-1 text-left p-3 flex items-center justify-between gap-3 hover:bg-white/5 active:bg-white/10 rounded-l-xl"
+                >
+                  <div>
+                    <div className="font-semibold">{t.name}</div>
+                    <div className="text-xs text-white/60">
+                      {t.smallBlind}/{t.bigBlind} blinds · buy-in {t.minBuyIn}–{t.maxBuyIn}
+                    </div>
                   </div>
-                </div>
-                <div className="text-right">
-                  <div className="text-xs text-white/50">Seats</div>
-                  <div className="font-mono">
-                    {t.occupiedSeats}/{t.maxSeats}
+                  <div className="text-right">
+                    <div className="text-xs text-white/50">Seats</div>
+                    <div className="font-mono">
+                      {t.occupiedSeats}/{t.maxSeats}
+                    </div>
                   </div>
-                </div>
-              </button>
+                </button>
+                {isAdmin && t.occupiedSeats > 0 && (
+                  <button
+                    onClick={() => clearTable(t.id)}
+                    className="px-3 text-xs text-red-300 hover:bg-red-500/20 border-l border-white/10 rounded-r-xl"
+                    title="Admin: clear all seats"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
             ))}
           </div>
         </section>

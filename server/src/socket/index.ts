@@ -30,6 +30,12 @@ interface SocketData {
  */
 const activeSocketByPlayer = new Map<number, string>();
 
+/** Hardcoded admin usernames. Admins can kick players from tables. */
+const ADMIN_USERNAMES = new Set<string>(["nk"]);
+function isAdmin(username: string | null): boolean {
+  return !!username && ADMIN_USERNAMES.has(username);
+}
+
 export function registerSocketHandlers(
   io: Server<ClientToServerEvents, ServerToClientEvents>,
   lobby: Lobby,
@@ -237,6 +243,62 @@ export function registerSocketHandlers(
       if (seat) {
         seat.showCardsAtShowdown = true;
       }
+    });
+
+    sock.on("admin:kickPlayer", async ({ tableId, targetPlayerId }, cb) => {
+      if (!isAdmin(sock.data.username)) {
+        cb({ ok: false, error: "not authorized" });
+        return;
+      }
+      const table = lobby.getTable(tableId);
+      if (!table) {
+        cb({ ok: false, error: "table not found" });
+        return;
+      }
+      if (!table.findSeatByPlayer(targetPlayerId)) {
+        cb({ ok: false, error: "player not at this table" });
+        return;
+      }
+      try {
+        await lobby.cashOut({ tableId, playerId: targetPlayerId });
+        const targetSid = activeSocketByPlayer.get(targetPlayerId);
+        if (targetSid) {
+          io.to(targetSid).emit("error", "Kicked from table by admin");
+        }
+        cb({ ok: true });
+      } catch (err) {
+        cb({ ok: false, error: errorMessage(err) });
+      }
+    });
+
+    sock.on("admin:clearTable", async ({ tableId }, cb) => {
+      if (!isAdmin(sock.data.username)) {
+        cb({ ok: false, error: "not authorized" });
+        return;
+      }
+      const table = lobby.getTable(tableId);
+      if (!table) {
+        cb({ ok: false, error: "table not found" });
+        return;
+      }
+      const playerIds = table
+        .occupiedSeats()
+        .map((s) => s.playerId)
+        .filter((id): id is number => id != null);
+      let cleared = 0;
+      for (const pid of playerIds) {
+        try {
+          await lobby.cashOut({ tableId, playerId: pid });
+          cleared++;
+          const sid = activeSocketByPlayer.get(pid);
+          if (sid) {
+            io.to(sid).emit("error", "Table cleared by admin");
+          }
+        } catch {
+          // skip players we couldn't cash out (e.g. mid-hand deferred)
+        }
+      }
+      cb({ ok: true, cleared });
     });
 
     sock.on("table:chat", ({ tableId, message }) => {

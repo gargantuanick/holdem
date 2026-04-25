@@ -131,6 +131,14 @@ export interface ClientToServerEvents {
   ) => void;
   "table:sitOut": (args: { tableId: string; sittingOut: boolean }) => void;
   "table:requestState": (args: { tableId: string }) => void;
+  "admin:kickPlayer": (
+    args: { tableId: string; targetPlayerId: number },
+    cb: (res: { ok: true } | { ok: false; error: string }) => void,
+  ) => void;
+  "admin:clearTable": (
+    args: { tableId: string },
+    cb: (res: { ok: true; cleared: number } | { ok: false; error: string }) => void,
+  ) => void;
   "table:action": (args: { tableId: string; action: PlayerAction }) => void;
   "table:chat": (args: { tableId: string; message: string }) => void;
   "table:showCards": (args: { tableId: string }) => void;

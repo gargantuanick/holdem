@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode, createElement } from "react";
 import type {
   ChatMessage,
   HandFinishedPayload,
@@ -15,7 +15,9 @@ export interface GameState {
   errorBanner: string | null;
 }
 
-export function useGameState(): GameState {
+const GameStateContext = createContext<GameState | null>(null);
+
+export function GameStateProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<PublicTableState | null>(null);
   const [chat, setChat] = useState<ChatMessage[]>([]);
   const [history, setHistory] = useState<HandHistoryEntry[]>([]);
@@ -30,7 +32,6 @@ export function useGameState(): GameState {
     const onHist = (h: HandHistoryEntry[]) => setHistory(h);
     const onFinish = (p: HandFinishedPayload) => {
       setLastHand(p);
-      // Clear after 6s
       setTimeout(() => setLastHand((cur) => (cur === p ? null : cur)), 6000);
     };
     const onErr = (msg: string) => {
@@ -51,5 +52,14 @@ export function useGameState(): GameState {
     };
   }, []);
 
-  return { state, chat, history, lastHand, errorBanner };
+  const value: GameState = { state, chat, history, lastHand, errorBanner };
+  return createElement(GameStateContext.Provider, { value }, children);
+}
+
+export function useGameState(): GameState {
+  const ctx = useContext(GameStateContext);
+  if (!ctx) {
+    throw new Error("useGameState must be used inside GameStateProvider");
+  }
+  return ctx;
 }

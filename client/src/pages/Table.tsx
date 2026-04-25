@@ -16,6 +16,7 @@ export function TablePage() {
   const { profile, wallet } = useSession();
   const { state, chat, history, lastHand, errorBanner } = useGameState();
   const [chatOpen, setChatOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [profileOf, setProfileOf] = useState<string | null>(null);
   const [unseenChat, setUnseenChat] = useState(0);
   const [rebuyOpen, setRebuyOpen] = useState(false);
@@ -104,6 +105,13 @@ export function TablePage() {
         </div>
         <WalletBadge wallet={wallet} />
         <button
+          onClick={() => setHistoryOpen(true)}
+          className="text-xs px-2 py-1 rounded-md bg-white/8 hover:bg-white/12"
+          aria-label="hand history"
+        >
+          📜
+        </button>
+        <button
           onClick={() => setChatOpen(true)}
           className="relative text-xs px-2 py-1 rounded-md bg-white/8 hover:bg-white/12"
           aria-label="chat"
@@ -118,7 +126,6 @@ export function TablePage() {
       </header>
 
       <div className="relative">
-        <HandHistoryPanel entries={history} />
         {state ? (
           <TableCanvas
             state={state}
@@ -231,6 +238,12 @@ export function TablePage() {
           tableId={tableId}
           messages={chat}
           onClose={() => setChatOpen(false)}
+        />
+      )}
+      {historyOpen && (
+        <HandHistoryPanel
+          entries={history}
+          onClose={() => setHistoryOpen(false)}
         />
       )}
       {profileOf && (

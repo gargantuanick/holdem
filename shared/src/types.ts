@@ -27,6 +27,8 @@ export interface PublicSeat {
   isAllIn: boolean;
   sittingOut: boolean;
   isConnected: boolean;
+  /** True if this player has hit "Start" while waiting for the first hand. */
+  ready: boolean;
   // hole cards: only present in personalized payload for the seat owner
   holeCards?: [Card, Card] | null;
   hasCards: boolean; // whether this seat has been dealt cards this hand
@@ -130,6 +132,7 @@ export interface ClientToServerEvents {
     cb: (res: { ok: true } | { ok: false; error: string }) => void,
   ) => void;
   "table:sitOut": (args: { tableId: string; sittingOut: boolean }) => void;
+  "table:setReady": (args: { tableId: string; ready: boolean }) => void;
   "table:requestState": (args: { tableId: string }) => void;
   "admin:kickPlayer": (
     args: { tableId: string; targetPlayerId: number },

@@ -224,6 +224,20 @@ export function registerSocketHandlers(
       }
     });
 
+    sock.on("table:setReady", ({ tableId, ready }) => {
+      if (!sock.data.playerId) return;
+      const table = lobby.getTable(tableId);
+      if (!table) return;
+      try {
+        table.setReady(sock.data.playerId, ready);
+        if (table.canStartHand()) {
+          table.startHand();
+        }
+      } catch {
+        // ignore
+      }
+    });
+
     sock.on("table:action", ({ tableId, action }) => {
       if (!sock.data.playerId) return;
       const table = lobby.getTable(tableId);

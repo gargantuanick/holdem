@@ -40,6 +40,8 @@ export interface TableSeat {
   showCardsAtShowdown: boolean;
   /** Set when player wants to leave; will be removed after current hand ends. */
   pendingLeave: boolean;
+  /** True if this player has clicked "Start" while waiting for the first hand. */
+  ready: boolean;
 }
 
 export interface TableEvents {
@@ -86,6 +88,7 @@ export class Table {
       holeCards: null,
       showCardsAtShowdown: false,
       pendingLeave: false,
+      ready: false,
     }));
   }
 
@@ -165,8 +168,17 @@ export class Table {
     seat.showCardsAtShowdown = false;
     seat.pendingLeave = false;
     seat.isConnected = true;
+    seat.ready = false;
     this.events.onStateChange(this);
     return stack;
+  }
+
+  /** Mark a player as ready (or unready) for the first hand. */
+  setReady(playerId: number, ready: boolean): void {
+    const seat = this.findSeatByPlayer(playerId);
+    if (!seat) throw new Error("not seated");
+    seat.ready = ready;
+    this.events.onStateChange(this);
   }
 
   rebuy(playerId: number, amount: number): number {
@@ -211,7 +223,13 @@ export class Table {
         !s.sittingOut &&
         s.stack >= this.config.bigBlind, // need at least BB to be dealt in
     );
-    return eligible.length >= 2;
+    if (eligible.length < 2) return false;
+    // For the first hand, every eligible player must press Start so we don't
+    // deal in someone who's still waiting for friends to join.
+    if (this.handNumber === 0 && eligible.some((s) => !s.ready)) {
+      return false;
+    }
+    return true;
   }
 
   startHand(): void {
@@ -291,6 +309,7 @@ export class Table {
       this.finishHand();
     } else {
       this.scheduleActionTimer();
+      this.events.onStateChange(this);
     }
   }
 
@@ -317,6 +336,7 @@ export class Table {
       this.finishHand();
     } else {
       this.scheduleActionTimer();
+      this.events.onStateChange(this);
     }
     this.events.onActionTimeout(this, seatIndex);
   }
@@ -494,6 +514,7 @@ export class Table {
         isAllIn: s.isAllIn,
         sittingOut: s.sittingOut,
         isConnected: s.isConnected,
+        ready: s.ready,
         holeCards: showHole ? s.holeCards : null,
         hasCards: s.inCurrentHand && !s.hasFolded && s.holeCards !== null,
       };

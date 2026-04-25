@@ -69,6 +69,22 @@ export function TablePage() {
     if (!tableId) return;
     getSocket().emit("table:sitOut", { tableId, sittingOut: out });
   };
+  const setReady = (ready: boolean) => {
+    if (!tableId) return;
+    getSocket().emit("table:setReady", { tableId, ready });
+  };
+
+  // "Start game" gate shows before hand 1 — let players wait for friends and
+  // explicitly press Start before the deal happens.
+  const seatedPlayers = state?.seats.filter((s) => s.playerId !== null) ?? [];
+  const eligiblePlayers = state
+    ? seatedPlayers.filter(
+        (s) => !s.sittingOut && s.stack >= state.config.bigBlind,
+      )
+    : [];
+  const readyCount = eligiblePlayers.filter((s) => s.ready).length;
+  const showStartGate =
+    !!state && state.handNumber === 0 && !!mySeat && state.street === "idle";
 
   return (
     <div className="min-h-full w-full bg-felt-900 text-white relative pb-[120px] safe-top">
@@ -161,7 +177,48 @@ export function TablePage() {
         )}
       </div>
 
-      {state && localPlayerId && state.toActSeat !== null && (
+      {showStartGate && mySeat && (
+        <div className="fixed bottom-0 inset-x-0 safe-bottom bg-felt-900/95 backdrop-blur border-t border-white/10 px-3 pt-3 pb-3 z-20">
+          <div className="rounded-xl bg-felt-800 border border-white/15 p-3">
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <div className="font-semibold">Waiting to start</div>
+                <div className="text-xs text-white/60">
+                  {readyCount} of {eligiblePlayers.length} ready
+                  {eligiblePlayers.length < 2 && " · need 2+ players"}
+                </div>
+              </div>
+              <button
+                onClick={() => setReady(!mySeat.ready)}
+                disabled={eligiblePlayers.length < 2 && !mySeat.ready}
+                className={`px-4 py-2 rounded-md font-semibold text-sm ${
+                  mySeat.ready
+                    ? "bg-white/10 text-white/70"
+                    : "bg-chip-gold text-black disabled:opacity-50"
+                }`}
+              >
+                {mySeat.ready ? "Cancel" : "Start"}
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-1 text-[11px]">
+              {eligiblePlayers.map((s) => (
+                <span
+                  key={s.seatIndex}
+                  className={`px-2 py-0.5 rounded-full border ${
+                    s.ready
+                      ? "bg-emerald-700/30 border-emerald-500/40 text-emerald-200"
+                      : "bg-white/5 border-white/15 text-white/60"
+                  }`}
+                >
+                  {s.username} {s.ready ? "✓" : "…"}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!showStartGate && state && localPlayerId && state.toActSeat !== null && (
         <BettingControls
           state={state}
           tableId={tableId}

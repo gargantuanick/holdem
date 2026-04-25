@@ -73,11 +73,16 @@ describe("Table — seat management", () => {
 });
 
 describe("Table — hand lifecycle", () => {
-  it("starts a hand when 2+ eligible players seated", () => {
+  it("starts a hand when 2+ eligible players seated and ready", () => {
     const t = new Table(cfg, noopEvents);
     t.sitDown({ playerId: 1, username: "a", buyIn: 200 });
     expect(t.canStartHand()).toBe(false);
     t.sitDown({ playerId: 2, username: "b", buyIn: 200 });
+    // Pre-hand-1 gate: every eligible player must press Start.
+    expect(t.canStartHand()).toBe(false);
+    t.setReady(1, true);
+    expect(t.canStartHand()).toBe(false);
+    t.setReady(2, true);
     expect(t.canStartHand()).toBe(true);
     t.startHand();
     expect(t.engine).not.toBeNull();

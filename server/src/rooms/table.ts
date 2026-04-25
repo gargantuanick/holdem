@@ -152,6 +152,32 @@ export class Table {
     return { stack: this.removeSeat(seat), deferred: false };
   }
 
+  /**
+   * Admin-only: nuke any in-progress hand and stop timers so seats can be
+   * removed cleanly. Stacks remain on the seats; caller is expected to
+   * removeSeat() each one and credit wallets.
+   */
+  abortHand(): void {
+    this.clearActionTimer();
+    if (this.nextHandTimer) {
+      clearTimeout(this.nextHandTimer);
+      this.nextHandTimer = null;
+    }
+    this.engine = null;
+    this.actionDeadline = null;
+    for (const s of this.seats) {
+      s.inCurrentHand = false;
+      s.holeCards = null;
+      s.showCardsAtShowdown = false;
+      s.betThisStreet = 0;
+      s.totalCommitted = 0;
+      s.hasFolded = false;
+      s.isAllIn = false;
+      s.pendingLeave = false;
+    }
+    this.events.onStateChange(this);
+  }
+
   /** Force-remove a seat now. Returns the stack to credit back. */
   removeSeat(seat: TableSeat): number {
     const stack = seat.stack;

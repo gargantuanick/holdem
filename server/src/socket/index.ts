@@ -290,29 +290,18 @@ export function registerSocketHandlers(
         cb({ ok: false, error: "not authorized" });
         return;
       }
-      const table = lobby.getTable(tableId);
-      if (!table) {
-        cb({ ok: false, error: "table not found" });
-        return;
-      }
-      const playerIds = table
-        .occupiedSeats()
-        .map((s) => s.playerId)
-        .filter((id): id is number => id != null);
-      let cleared = 0;
-      for (const pid of playerIds) {
-        try {
-          await lobby.cashOut({ tableId, playerId: pid });
-          cleared++;
+      try {
+        const cleared = await lobby.adminForceClear(tableId);
+        for (const pid of cleared) {
           const sid = activeSocketByPlayer.get(pid);
           if (sid) {
             io.to(sid).emit("error", "Table cleared by admin");
           }
-        } catch {
-          // skip players we couldn't cash out (e.g. mid-hand deferred)
         }
+        cb({ ok: true, cleared: cleared.length });
+      } catch (err) {
+        cb({ ok: false, error: errorMessage(err) });
       }
-      cb({ ok: true, cleared });
     });
 
     sock.on("table:chat", ({ tableId, message }) => {

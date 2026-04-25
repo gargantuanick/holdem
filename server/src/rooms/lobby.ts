@@ -185,6 +185,33 @@ export class Lobby {
     return { wallet: player?.walletChips ?? 0, deferred: false };
   }
 
+  /**
+   * Admin: nuke any in-progress hand and force-evict every seated player,
+   * crediting their stacks back to their wallets. Returns the list of
+   * playerIds that were cleared.
+   */
+  async adminForceClear(tableId: string): Promise<number[]> {
+    const table = this.tables.get(tableId);
+    if (!table) throw new Error("table not found");
+    table.abortHand();
+    const cleared: number[] = [];
+    for (const seat of table.seats) {
+      if (seat.playerId === null) continue;
+      const playerId = seat.playerId;
+      const stack = table.removeSeat(seat);
+      if (stack > 0) {
+        try {
+          await creditWallet(playerId, stack);
+        } catch (err) {
+          console.error("[lobby] adminForceClear credit failed:", err);
+        }
+      }
+      cleared.push(playerId);
+    }
+    invalidateLeaderboardCache();
+    return cleared;
+  }
+
   async rebuy(args: {
     tableId: string;
     playerId: number;

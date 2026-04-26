@@ -13,6 +13,9 @@ export interface GameState {
   history: HandHistoryEntry[];
   lastHand: HandFinishedPayload | null;
   errorBanner: string | null;
+  /** False while the socket is mid-reconnect. UI can dim controls and
+   *  surface a banner so users don't think the app is frozen. */
+  connected: boolean;
 }
 
 const GameStateContext = createContext<GameState | null>(null);
@@ -23,6 +26,7 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   const [history, setHistory] = useState<HandHistoryEntry[]>([]);
   const [lastHand, setLastHand] = useState<HandFinishedPayload | null>(null);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
+  const [connected, setConnected] = useState<boolean>(() => getSocket().connected);
 
   useEffect(() => {
     const sock = getSocket();
@@ -38,21 +42,27 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
       setErrorBanner(msg);
       setTimeout(() => setErrorBanner((cur) => (cur === msg ? null : cur)), 4000);
     };
+    const onConnect = () => setConnected(true);
+    const onDisconnect = () => setConnected(false);
     sock.on("table:state", onState);
     sock.on("table:chat", onChat);
     sock.on("table:history", onHist);
     sock.on("table:handFinished", onFinish);
     sock.on("error", onErr);
+    sock.on("connect", onConnect);
+    sock.on("disconnect", onDisconnect);
     return () => {
       sock.off("table:state", onState);
       sock.off("table:chat", onChat);
       sock.off("table:history", onHist);
       sock.off("table:handFinished", onFinish);
       sock.off("error", onErr);
+      sock.off("connect", onConnect);
+      sock.off("disconnect", onDisconnect);
     };
   }, []);
 
-  const value: GameState = { state, chat, history, lastHand, errorBanner };
+  const value: GameState = { state, chat, history, lastHand, errorBanner, connected };
   return createElement(GameStateContext.Provider, { value }, children);
 }
 

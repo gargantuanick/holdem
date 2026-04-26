@@ -50,7 +50,14 @@ export function registerSocketHandlers(
     sock.emit("error", "Action timed out — sat out. Tap Sit in to rejoin.");
   };
 
-  io.on("connection", (rawSock) => {
+  // Connection middleware: auto-resume from the handshake token BEFORE the
+  // `connection` event fires. socket.io queues up the client's emits until
+  // this middleware calls next(), so any table:join / table:action sent
+  // immediately on (re)connect lands AFTER sock.data is populated. Without
+  // running this in middleware (versus in the connection handler), there's
+  // a race window where buffered events fire against an empty sock.data
+  // and silently fail with "not authenticated".
+  io.use(async (rawSock, next) => {
     const sock = rawSock as Socket<
       ClientToServerEvents,
       ServerToClientEvents,
@@ -58,6 +65,48 @@ export function registerSocketHandlers(
       SocketData
     >;
     sock.data = { playerId: null, username: null, token: null };
+    const handshakeToken = (sock.handshake.auth as { token?: unknown } | undefined)?.token;
+    if (typeof handshakeToken !== "string" || handshakeToken.length === 0) {
+      next();
+      return;
+    }
+    try {
+      const playerId = await getPlayerIdForToken(handshakeToken);
+      if (!playerId) {
+        next(); // bad/expired token; client will re-login on its own
+        return;
+      }
+      const player = await getPlayerById(playerId);
+      if (!player) {
+        next();
+        return;
+      }
+      // Don't kick prior socket here — handshake auth fires on every
+      // reconnect and a kick storm would race with the user's other tabs.
+      // Explicit auth:login still does kickPriorSocket for fresh logins.
+      activeSocketByPlayer.set(player.id, sock.id);
+      sock.data.playerId = player.id;
+      sock.data.username = player.username;
+      sock.data.token = handshakeToken;
+      lobby.handleReconnect(player.id);
+      next();
+    } catch (err) {
+      console.error("[auth] handshake auto-resume failed:", err);
+      // Don't reject the connection — fall back to "unauth'd until
+      // explicit auth:login". The client will recover.
+      next();
+    }
+  });
+
+  io.on("connection", (rawSock) => {
+    const sock = rawSock as Socket<
+      ClientToServerEvents,
+      ServerToClientEvents,
+      Record<string, never>,
+      SocketData
+    >;
+    // sock.data is already populated by the auth middleware above (or left
+    // null if no handshake token was provided / token was invalid).
 
     sock.on("ping", (cb) => {
       cb("pong");
@@ -224,7 +273,10 @@ export function registerSocketHandlers(
     });
 
     sock.on("table:sitOut", ({ tableId, sittingOut }) => {
-      if (!sock.data.playerId) return;
+      if (!sock.data.playerId) {
+        sock.emit("error", "Not authenticated — please reload.");
+        return;
+      }
       const table = lobby.getTable(tableId);
       if (!table) return;
       try {
@@ -235,7 +287,10 @@ export function registerSocketHandlers(
     });
 
     sock.on("table:setReady", ({ tableId, ready }) => {
-      if (!sock.data.playerId) return;
+      if (!sock.data.playerId) {
+        sock.emit("error", "Not authenticated — please reload.");
+        return;
+      }
       const table = lobby.getTable(tableId);
       if (!table) return;
       try {
@@ -249,7 +304,10 @@ export function registerSocketHandlers(
     });
 
     sock.on("table:action", ({ tableId, action }) => {
-      if (!sock.data.playerId) return;
+      if (!sock.data.playerId) {
+        sock.emit("error", "Not authenticated — please reload.");
+        return;
+      }
       if (!isValidAction(action)) {
         sock.emit("error", "invalid action payload");
         return;

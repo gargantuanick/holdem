@@ -3,6 +3,7 @@ import type {
   ClientToServerEvents,
   ServerToClientEvents,
 } from "@holdem/shared";
+import { loadToken } from "./session";
 
 export type AppSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
@@ -19,6 +20,12 @@ export function getSocket(): AppSocket {
     reconnection: true,
     reconnectionDelay: 500,
     reconnectionDelayMax: 5_000,
+    // Send the persisted session token on every (re)connect so the server
+    // can re-authenticate the socket without waiting for the client to
+    // explicitly call auth:resume. This closes the race where a socket
+    // reconnect (network blip, server restart) leaves sock.data unauth'd
+    // and table:join fails with "not authenticated".
+    auth: (cb) => cb({ token: loadToken() ?? null }),
   });
   return _socket;
 }

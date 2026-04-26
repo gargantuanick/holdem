@@ -33,13 +33,13 @@ export function TableCanvas({
       <div className="absolute inset-4 rounded-[40%/30%] border border-white/10" />
 
       {/* Community cards + pot in the center */}
-      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-2 pointer-events-none">
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-3 pointer-events-none">
         <div className="text-[10px] uppercase tracking-widest text-white/40">
           {state.street === "idle"
             ? "waiting"
             : `Hand #${state.handNumber} · ${state.street}`}
         </div>
-        <div className="flex gap-1.5 max-w-full">
+        <div className="flex gap-1 sm:gap-1.5">
           {Array.from({ length: 5 }).map((_, i) => {
             const card = state.communityCards[i];
             return card ? (
@@ -47,7 +47,7 @@ export function TableCanvas({
             ) : (
               <div
                 key={i}
-                className="w-16 h-[5.75rem] rounded-md border border-white/10 bg-white/5"
+                className="w-12 h-[4.25rem] sm:w-16 sm:h-[5.75rem] rounded-md border border-white/10 bg-white/5"
               />
             );
           })}

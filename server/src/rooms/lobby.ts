@@ -75,6 +75,19 @@ export class Lobby {
     minBuyIn: number;
     maxBuyIn: number;
   }): Table {
+    // Reject non-finite numbers so NaN/Infinity can't sneak past range checks.
+    for (const f of ["maxSeats", "smallBlind", "bigBlind", "minBuyIn", "maxBuyIn"] as const) {
+      const v = args[f];
+      if (typeof v !== "number" || !Number.isFinite(v) || !Number.isInteger(v)) {
+        throw new Error(`${f} must be a finite integer`);
+      }
+    }
+    if (typeof args.name !== "string" || args.name.trim().length === 0) {
+      throw new Error("name required");
+    }
+    if (args.name.length > 40) {
+      throw new Error("name too long (max 40 chars)");
+    }
     if (args.maxSeats < 2 || args.maxSeats > 9) {
       throw new Error("maxSeats must be 2..9");
     }
@@ -133,6 +146,14 @@ export class Lobby {
   }): Promise<{ wallet: number }> {
     const table = this.tables.get(args.tableId);
     if (!table) throw new Error("table not found");
+    if (
+      typeof args.buyIn !== "number" ||
+      !Number.isFinite(args.buyIn) ||
+      !Number.isInteger(args.buyIn) ||
+      args.buyIn <= 0
+    ) {
+      throw new Error("buy-in must be a positive integer");
+    }
     if (table.findSeatByPlayer(args.playerId)) {
       throw new Error("already at this table");
     }
@@ -240,6 +261,14 @@ export class Lobby {
   }): Promise<{ wallet: number; stack: number }> {
     const table = this.tables.get(args.tableId);
     if (!table) throw new Error("table not found");
+    if (
+      typeof args.amount !== "number" ||
+      !Number.isFinite(args.amount) ||
+      !Number.isInteger(args.amount) ||
+      args.amount <= 0
+    ) {
+      throw new Error("rebuy must be a positive integer");
+    }
     const seat = table.findSeatByPlayer(args.playerId);
     if (!seat) throw new Error("not at this table");
     const newWallet = await debitWallet(args.playerId, args.amount);

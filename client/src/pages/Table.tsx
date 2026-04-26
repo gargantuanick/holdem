@@ -15,7 +15,7 @@ export function TablePage() {
   const { tableId } = useParams<{ tableId: string }>();
   const navigate = useNavigate();
   const { profile, wallet } = useSession();
-  const { state, chat, history, lastHand, errorBanner } = useGameState();
+  const { state, chat, history, lastHand, errorBanner, connected } = useGameState();
   const [chatOpen, setChatOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [profileOf, setProfileOf] = useState<string | null>(null);
@@ -30,10 +30,19 @@ export function TablePage() {
   }, []);
 
   // Pull current state on mount — the initial state emit from table:join
-  // can race with the navigate→mount→subscribe cycle.
+  // can race with the navigate→mount→subscribe cycle. Also re-pull on
+  // every socket reconnect, in case the server has restarted and our
+  // cached `state` is stale (or the server doesn't proactively broadcast
+  // until something changes).
   useEffect(() => {
     if (!tableId) return;
-    getSocket().emit("table:requestState", { tableId });
+    const sock = getSocket();
+    const ask = () => sock.emit("table:requestState", { tableId });
+    ask();
+    sock.on("connect", ask);
+    return () => {
+      sock.off("connect", ask);
+    };
   }, [tableId]);
 
   // If the server kicks me from this table (admin clear, future kick), the
@@ -166,7 +175,12 @@ export function TablePage() {
         ) : (
           <div className="text-white/60 text-center py-12">Loading table…</div>
         )}
-        {errorBanner && (
+        {!connected && (
+          <div className="absolute top-2 right-2 left-2 sm:left-auto sm:max-w-xs bg-amber-600/90 text-white text-sm px-3 py-2 rounded-md">
+            Reconnecting…
+          </div>
+        )}
+        {connected && errorBanner && (
           <div className="absolute top-2 right-2 left-2 sm:left-auto sm:max-w-xs bg-red-700/90 text-white text-sm px-3 py-2 rounded-md">
             {errorBanner}
           </div>

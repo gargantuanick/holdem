@@ -3,6 +3,7 @@ import type { LobbyTableSummary } from "@holdem/shared";
 import { Modal } from "./Modal";
 import { getSocket } from "../lib/socket";
 import { formatChips } from "../lib/format";
+import { loadToken } from "../lib/session";
 
 export function JoinTableModal({
   table,
@@ -30,20 +31,45 @@ export function JoinTableModal({
     if (insufficient) return;
     setBusy(true);
     setError(null);
-    getSocket().emit("table:join", { tableId: table.id, buyIn }, (res) => {
-      setBusy(false);
-      if (!res.ok) {
-        // If we're already at the table from a prior session/device,
-        // skip the buy-in and just go to the table page.
-        if (res.error === "already at this table") {
+    const sock = getSocket();
+    const tryJoin = (allowRetry: boolean) => {
+      sock.emit("table:join", { tableId: table.id, buyIn }, (res) => {
+        if (res.ok) {
+          setBusy(false);
           onJoined();
           return;
         }
+        // Idempotent: already seated → just navigate.
+        if (res.error === "already at this table") {
+          setBusy(false);
+          onJoined();
+          return;
+        }
+        // Race: socket reconnected (network blip / server restart) and the
+        // handshake auto-resume hasn't completed yet. Retry once after a
+        // manual auth:resume.
+        if (res.error === "not authenticated" && allowRetry) {
+          const token = loadToken();
+          if (!token) {
+            setBusy(false);
+            setError("Session expired — please reload.");
+            return;
+          }
+          sock.emit("auth:resume", { token }, (r) => {
+            if (!r.ok) {
+              setBusy(false);
+              setError("Session expired — please reload.");
+              return;
+            }
+            tryJoin(false); // one retry, no further loops
+          });
+          return;
+        }
+        setBusy(false);
         setError(res.error);
-      } else {
-        onJoined();
-      }
-    });
+      });
+    };
+    tryJoin(true);
   };
 
   return (

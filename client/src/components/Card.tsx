@@ -25,10 +25,12 @@ export function PlayingCard({
   faceDown?: boolean;
   glow?: boolean;
 }) {
+  // Mobile-first sizes. Defaults are tuned to fit 5 community cards on a
+  // 360px-wide phone with margins; sm: (640px+) scales each tier up.
   const sizes = {
-    sm: "w-9 h-[3.25rem] text-sm",
-    md: "w-12 h-[4.25rem] text-lg",
-    lg: "w-16 h-[5.75rem] text-2xl",
+    sm: "w-8 h-[2.75rem] text-xs sm:w-9 sm:h-[3.25rem] sm:text-sm",
+    md: "w-10 h-[3.5rem] text-base sm:w-12 sm:h-[4.25rem] sm:text-lg",
+    lg: "w-12 h-[4.25rem] text-lg sm:w-16 sm:h-[5.75rem] sm:text-2xl",
   };
   if (faceDown || !card) {
     return (

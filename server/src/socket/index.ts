@@ -178,6 +178,43 @@ export function registerSocketHandlers(
       sock.emit("wallet:update", r.wallet);
     });
 
+    sock.on("auth:logout", async (cb) => {
+      // Best-effort: cash the player out of any tables they're at, then
+      // invalidate the session token in the DB so it can't auto-resume.
+      // Always ack ok — if the DB blip we still want the client to clear
+      // its local session and return to login.
+      const playerId = sock.data.playerId;
+      const token = sock.data.token;
+      if (playerId !== null) {
+        try {
+          activeSocketByPlayer.delete(playerId);
+          // Force-leave any tables the player is seated at. We iterate
+          // tables via the lobby; cashOut handles the wallet credit.
+          for (const summary of lobby.listTables()) {
+            const table = lobby.getTable(summary.id);
+            if (!table || !table.findSeatByPlayer(playerId)) continue;
+            try {
+              await lobby.cashOut({ tableId: summary.id, playerId });
+            } catch {
+              // ignore — mid-hand deferred cashouts will resolve on hand end
+            }
+            sock.leave(summary.id);
+          }
+        } catch (err) {
+          console.error("[auth] logout cleanup error:", err);
+        }
+      }
+      if (typeof token === "string" && token.length > 0) {
+        try {
+          await deleteSession(token);
+        } catch (err) {
+          console.error("[auth] logout deleteSession error:", err);
+        }
+      }
+      sock.data = { playerId: null, username: null, token: null };
+      cb({ ok: true });
+    });
+
     sock.on("lobby:list", (cb) => {
       cb(lobby.listTables());
     });

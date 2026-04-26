@@ -82,11 +82,13 @@ export function LobbyPage() {
         <div className="flex items-center gap-2">
           <WalletBadge wallet={wallet} />
           <button
-            onClick={logout}
-            className="text-xs text-white/50 hover:text-white px-2 py-1"
-            aria-label="logout"
+            onClick={() => {
+              if (confirm(`Sign out as ${profile?.username}?`)) logout();
+            }}
+            className="text-xs px-2 py-1 rounded-md bg-white/8 hover:bg-white/12 text-white/80"
+            aria-label="sign out"
           >
-            ↪
+            Sign out
           </button>
         </div>
       </header>

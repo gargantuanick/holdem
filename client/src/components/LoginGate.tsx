@@ -88,12 +88,29 @@ export function LoginGate({ children }: { children: ReactNode }) {
   };
 
   const logout = () => {
-    clearSession();
-    setProfile(null);
-    setWalletState(0);
-    // Soft refresh socket so server clears session-bound state.
-    getSocket().disconnect();
-    getSocket().connect();
+    const sock = getSocket();
+    // Tell the server to invalidate the session token and cash us out of
+    // any tables. Always clear local state regardless of the ack — the
+    // user has decided to sign out, so a server hiccup must not strand
+    // them on a logged-in screen. The connect() at the end gives us a
+    // clean unauth'd socket for the next login.
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      clearSession();
+      setProfile(null);
+      setWalletState(0);
+      sock.disconnect();
+      sock.connect();
+    };
+    try {
+      sock.timeout(2000).emit("auth:logout", () => finish());
+    } catch {
+      finish();
+    }
+    // Failsafe: never leave the user hanging if the ack never lands.
+    setTimeout(finish, 2200);
   };
 
   if (resuming) {

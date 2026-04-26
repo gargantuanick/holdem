@@ -181,6 +181,7 @@ export interface ClientToServerEvents {
         | { ok: false; error: string; nextRefillAt?: string },
     ) => void,
   ) => void;
+  "auth:logout": (cb: (res: { ok: true }) => void) => void;
 }
 
 export interface ServerToClientEvents {

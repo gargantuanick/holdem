@@ -14,7 +14,7 @@ import { formatChips } from "../lib/format";
 export function TablePage() {
   const { tableId } = useParams<{ tableId: string }>();
   const navigate = useNavigate();
-  const { profile, wallet } = useSession();
+  const { profile, wallet, logout } = useSession();
   const { state, chat, history, lastHand, errorBanner, connected } = useGameState();
   const [chatOpen, setChatOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -161,6 +161,22 @@ export function TablePage() {
               {unseenChat}
             </span>
           )}
+        </button>
+        <button
+          onClick={() => {
+            if (
+              !confirm(
+                `Sign out as ${profile?.username}? You'll cash out of this table.`,
+              )
+            )
+              return;
+            logout();
+            navigate("/lobby", { replace: true });
+          }}
+          className="text-xs px-2 py-1 rounded-md bg-white/8 hover:bg-white/12 text-white/80"
+          aria-label="sign out"
+        >
+          Sign out
         </button>
       </header>
 

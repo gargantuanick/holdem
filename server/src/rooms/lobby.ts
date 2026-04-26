@@ -29,6 +29,11 @@ export class Lobby {
   private io: Server<ClientToServerEvents, ServerToClientEvents>;
   /** Tracks which playerIds entered each table this session (for tables_joined++). */
   private joinedAt = new Map<string, Set<number>>();
+  /**
+   * Set by the socket layer so the lobby can notify the timed-out player's
+   * socket directly. Wired up in registerSocketHandlers.
+   */
+  onActionTimeout: ((tableId: string, playerId: number) => void) | null = null;
 
   constructor(io: Server<ClientToServerEvents, ServerToClientEvents>) {
     this.io = io;
@@ -90,8 +95,10 @@ export class Lobby {
     const table = new Table(config, {
       onStateChange: (t) => this.broadcastState(t),
       onHandFinished: (t, payload) => this.handleHandFinished(t, payload),
-      onActionTimeout: () => {
-        // No-op: state broadcast already covers it.
+      onActionTimeout: (t, seatIndex) => {
+        const ts = t.seats[seatIndex];
+        if (!ts || ts.playerId === null) return;
+        this.onActionTimeout?.(t.config.id, ts.playerId);
       },
     });
     this.tables.set(id, table);

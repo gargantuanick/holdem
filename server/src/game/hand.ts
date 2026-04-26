@@ -269,6 +269,15 @@ export class HandEngine {
         const delta = seat.stack;
         if (delta <= 0) throw new Error("no chips to all-in");
         const newTotal = seat.betThisStreet + delta;
+        // If this all-in would raise the current bet, the seat must still
+        // have raise rights — otherwise they can only go all-in to call (and
+        // any extra goes nowhere). This blocks the loophole where a capped
+        // player tries to bypass canStillRaise=false via the all-in button.
+        if (newTotal > this.currentBet && !seat.canStillRaise) {
+          throw new Error(
+            "action not reopened; you may only call or fold (use call to call)",
+          );
+        }
         this.commit(seat, delta);
         if (newTotal > this.currentBet) {
           const raiseSize = newTotal - this.currentBet;

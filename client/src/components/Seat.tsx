@@ -29,6 +29,7 @@ export function Seat({
     );
   }
   const winnerHighlight = !!winner;
+  const dimmedForOut = seat.sittingOut && !isLocal;
   return (
     <div
       className={`relative rounded-xl border px-2 py-1.5 min-w-[110px] flex flex-col items-center
@@ -36,6 +37,8 @@ export function Seat({
         ${isToAct ? "ring-2 ring-chip-gold animate-pulse" : ""}
         ${winnerHighlight ? "animate-winner-glow" : ""}
         ${seat.hasFolded ? "opacity-50" : ""}
+        ${seat.sittingOut ? "ring-2 ring-yellow-500/70" : ""}
+        ${dimmedForOut ? "opacity-60 grayscale" : ""}
       `}
     >
       {isDealer && (
@@ -44,8 +47,8 @@ export function Seat({
         </div>
       )}
       {seat.sittingOut && (
-        <div className="absolute -top-2 right-1 text-[9px] uppercase tracking-wider bg-yellow-600/80 text-black px-1.5 py-0.5 rounded">
-          out
+        <div className="absolute -top-3 left-1/2 -translate-x-1/2 text-[9px] font-bold uppercase tracking-widest bg-yellow-500 text-black px-2 py-0.5 rounded-full shadow whitespace-nowrap">
+          sitting out
         </div>
       )}
       {!seat.isConnected && (

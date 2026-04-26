@@ -40,6 +40,16 @@ export function registerSocketHandlers(
   io: Server<ClientToServerEvents, ServerToClientEvents>,
   lobby: Lobby,
 ): void {
+  // Surface action-timeout events to the timed-out player so the client can
+  // show a clear "You were sat out for taking too long" banner.
+  lobby.onActionTimeout = (tableId: string, playerId: number) => {
+    const sid = activeSocketByPlayer.get(playerId);
+    if (!sid) return;
+    const sock = io.sockets.sockets.get(sid);
+    if (!sock) return;
+    sock.emit("error", "Action timed out — sat out. Tap Sit in to rejoin.");
+  };
+
   io.on("connection", (rawSock) => {
     const sock = rawSock as Socket<
       ClientToServerEvents,
@@ -318,8 +328,17 @@ export function registerSocketHandlers(
 
     sock.on("table:chat", ({ tableId, message }) => {
       if (!sock.data.playerId || !sock.data.username) return;
+      if (typeof message !== "string") return;
+      // Hard cap: 200 chars after trim. Drop anything over the limit silently
+      // — the client also enforces 200 via maxLength on the input.
       const trimmed = message.trim().slice(0, 200);
       if (!trimmed) return;
+      // Rate limit chat per socket: 4 burst, 1.5/s sustained. This is more
+      // permissive than table:action because chat is normal user chatter.
+      if (!takeChatToken(sock.id)) {
+        sock.emit("error", "chat rate limited; slow down");
+        return;
+      }
       const msg: ChatMessage = {
         username: sock.data.username,
         message: trimmed,
@@ -330,6 +349,7 @@ export function registerSocketHandlers(
 
     sock.on("disconnect", async () => {
       actionBuckets.delete(sock.id);
+      chatBuckets.delete(sock.id);
       const pid = sock.data.playerId;
       if (pid != null) {
         // Only handle disconnect if THIS socket was the active one (avoid the
@@ -395,17 +415,33 @@ const ACTION_TOKEN_RATE = 4; // tokens per second
 const actionBuckets = new Map<string, { tokens: number; lastRefill: number }>();
 
 function takeActionToken(socketId: string): boolean {
+  return takeFromBucket(actionBuckets, socketId, ACTION_TOKEN_BURST, ACTION_TOKEN_RATE);
+}
+
+// Chat is more permissive than actions — typical chatter can be a few
+// messages in a couple of seconds.
+const CHAT_TOKEN_BURST = 4;
+const CHAT_TOKEN_RATE = 1.5; // tokens per second
+const chatBuckets = new Map<string, { tokens: number; lastRefill: number }>();
+
+function takeChatToken(socketId: string): boolean {
+  return takeFromBucket(chatBuckets, socketId, CHAT_TOKEN_BURST, CHAT_TOKEN_RATE);
+}
+
+function takeFromBucket(
+  store: Map<string, { tokens: number; lastRefill: number }>,
+  socketId: string,
+  burst: number,
+  rate: number,
+): boolean {
   const now = Date.now();
-  let bucket = actionBuckets.get(socketId);
+  let bucket = store.get(socketId);
   if (!bucket) {
-    bucket = { tokens: ACTION_TOKEN_BURST, lastRefill: now };
-    actionBuckets.set(socketId, bucket);
+    bucket = { tokens: burst, lastRefill: now };
+    store.set(socketId, bucket);
   }
   const elapsed = (now - bucket.lastRefill) / 1000;
-  bucket.tokens = Math.min(
-    ACTION_TOKEN_BURST,
-    bucket.tokens + elapsed * ACTION_TOKEN_RATE,
-  );
+  bucket.tokens = Math.min(burst, bucket.tokens + elapsed * rate);
   bucket.lastRefill = now;
   if (bucket.tokens < 1) return false;
   bucket.tokens -= 1;

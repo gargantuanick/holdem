@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { PlayerProfile } from "@holdem/shared";
 import { Modal } from "./Modal";
 import { serverUrl } from "../lib/socket";
+import { formatChips } from "../lib/format";
 
 export function ProfileModal({
   username,
@@ -39,10 +40,7 @@ export function ProfileModal({
       )}
       {profile && (
         <div className="space-y-2 text-sm">
-          <Stat
-            label="Wallet"
-            value={profile.walletChips.toLocaleString() + " ¢"}
-          />
+          <Stat label="Wallet" value={formatChips(profile.walletChips)} />
           <Stat label="Hands played" value={profile.handsPlayed.toLocaleString()} />
           <Stat label="Hands won" value={profile.handsWon.toLocaleString()} />
           <Stat
@@ -55,15 +53,15 @@ export function ProfileModal({
           />
           <Stat
             label="Total chips won"
-            value={profile.totalChipsWon.toLocaleString()}
+            value={formatChips(profile.totalChipsWon)}
           />
           <Stat
             label="Total chips lost"
-            value={profile.totalChipsLost.toLocaleString()}
+            value={formatChips(profile.totalChipsLost)}
           />
           <Stat
             label="Biggest pot won"
-            value={profile.biggestPotWon.toLocaleString()}
+            value={formatChips(profile.biggestPotWon)}
           />
           <Stat label="Tables joined" value={profile.tablesJoined.toLocaleString()} />
           <Stat

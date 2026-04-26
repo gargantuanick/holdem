@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { PublicTableState } from "@holdem/shared";
 import { getSocket } from "../lib/socket";
+import { formatChips } from "../lib/format";
 
 interface Props {
   state: PublicTableState;
@@ -92,7 +93,7 @@ export function BettingControls({ state, tableId, localPlayerId }: Props) {
           <div className="flex items-center justify-between text-xs text-white/70">
             <span>Raise to</span>
             <span className="font-mono text-white">
-              {raiseAmount.toLocaleString()}
+              {formatChips(raiseAmount)}
             </span>
           </div>
           <input
@@ -139,7 +140,7 @@ export function BettingControls({ state, tableId, localPlayerId }: Props) {
               }}
               className="flex-[2] py-2 rounded-md bg-chip-gold text-black font-semibold text-sm"
             >
-              Confirm {raiseAmount.toLocaleString()}
+              Confirm {formatChips(raiseAmount)}
             </button>
           </div>
         </div>
@@ -167,7 +168,7 @@ export function BettingControls({ state, tableId, localPlayerId }: Props) {
               : "bg-blue-700/80 hover:bg-blue-700 text-white active:scale-[0.98]"
           }`}
         >
-          {canCheck ? "Check" : `Call ${toCall.toLocaleString()}`}
+          {canCheck ? "Check" : `Call ${formatChips(toCall)}`}
         </button>
         <button
           disabled={

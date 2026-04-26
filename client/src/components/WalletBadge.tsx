@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { formatChips } from "../lib/format";
 
 export function WalletBadge({ wallet }: { wallet: number }) {
   const [bumpKey, setBumpKey] = useState(0);
@@ -15,7 +16,7 @@ export function WalletBadge({ wallet }: { wallet: number }) {
       className="rounded-full bg-chip-gold/15 border border-chip-gold/40 text-chip-gold px-3 py-1 text-sm font-mono animate-wallet-bump"
       aria-label={`wallet ${wallet} chips`}
     >
-      {wallet.toLocaleString()} ¢
+      {formatChips(wallet)}
     </div>
   );
 }

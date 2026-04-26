@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { LobbyTableSummary } from "@holdem/shared";
 import { Modal } from "./Modal";
 import { getSocket } from "../lib/socket";
+import { formatChips } from "../lib/format";
 
 export function JoinTableModal({
   table,
@@ -51,30 +52,30 @@ export function JoinTableModal({
         <div className="flex justify-between text-white/70">
           <span>Blinds</span>
           <span className="font-mono">
-            {table.smallBlind}/{table.bigBlind}
+            {formatChips(table.smallBlind)}/{formatChips(table.bigBlind)}
           </span>
         </div>
         <div className="flex justify-between text-white/70">
           <span>Buy-in range</span>
           <span className="font-mono">
-            {table.minBuyIn}–{table.maxBuyIn}
+            {formatChips(table.minBuyIn)}–{formatChips(table.maxBuyIn)}
           </span>
         </div>
         <div className="flex justify-between text-white/70">
           <span>Wallet</span>
-          <span className="font-mono">{wallet.toLocaleString()}</span>
+          <span className="font-mono">{formatChips(wallet)}</span>
         </div>
 
         {insufficient ? (
           <div className="text-red-300 text-sm">
-            You need at least {minBuy} chips to join this table.
+            You need at least {formatChips(minBuy)} to join this table.
           </div>
         ) : (
           <>
             <div>
               <div className="flex justify-between mb-1">
                 <span className="text-white/60">Buy-in amount</span>
-                <span className="font-mono">{buyIn.toLocaleString()}</span>
+                <span className="font-mono">{formatChips(buyIn)}</span>
               </div>
               <input
                 type="range"
@@ -117,7 +118,7 @@ export function JoinTableModal({
               disabled={busy}
               className="w-full rounded-lg bg-chip-gold text-black font-semibold py-3 disabled:opacity-50"
             >
-              {busy ? "Joining…" : `Buy in for ${buyIn.toLocaleString()}`}
+              {busy ? "Joining…" : `Buy in for ${formatChips(buyIn)}`}
             </button>
           </>
         )}

@@ -1,4 +1,5 @@
 import type { HandHistoryEntry } from "@holdem/shared";
+import { formatChips } from "../lib/format";
 
 interface Props {
   entries: HandHistoryEntry[];
@@ -36,14 +37,14 @@ export function HandHistoryPanel({ entries, onClose }: Props) {
             >
               <div className="text-white/50 text-[11px] mb-0.5">
                 #{e.handNumber} · {new Date(e.endedAt).toLocaleTimeString()} · pot{" "}
-                <span className="font-mono">{e.potTotal}</span>
+                <span className="font-mono">{formatChips(e.potTotal)}</span>
               </div>
               {e.winners.map((w, i) => (
                 <div key={i}>
                   <span className="text-chip-gold font-semibold">
                     {w.username}
                   </span>{" "}
-                  won <span className="font-mono">{w.amount}</span>
+                  won <span className="font-mono">{formatChips(w.amount)}</span>
                   {w.handDescription && (
                     <span className="text-white/50"> · {w.handDescription}</span>
                   )}

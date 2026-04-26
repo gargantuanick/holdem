@@ -9,6 +9,7 @@ import { ChatPanel } from "../components/ChatPanel";
 import { HandHistoryPanel } from "../components/HandHistoryPanel";
 import { ProfileModal } from "../components/ProfileModal";
 import { WalletBadge } from "../components/WalletBadge";
+import { formatChips } from "../lib/format";
 
 export function TablePage() {
   const { tableId } = useParams<{ tableId: string }>();
@@ -156,11 +157,11 @@ export function TablePage() {
         {lastHand && (
           <div className="absolute inset-x-2 top-12 mx-auto max-w-md bg-black/70 border border-chip-gold/40 rounded-lg p-2 text-center text-sm">
             <div className="text-chip-gold font-semibold mb-0.5">
-              Hand #{lastHand.handNumber} · pot {lastHand.potTotal}
+              Hand #{lastHand.handNumber} · pot {formatChips(lastHand.potTotal)}
             </div>
             {lastHand.winners.map((w, i) => (
               <div key={i}>
-                <b>{w.username}</b> wins {w.amount}
+                <b>{w.username}</b> wins {formatChips(w.amount)}
                 {w.handDescription && (
                   <span className="text-white/60"> · {w.handDescription}</span>
                 )}
@@ -209,7 +210,7 @@ export function TablePage() {
               )}
             </div>
             <div className="text-white/50 font-mono">
-              stack {mySeat.stack.toLocaleString()}
+              stack {formatChips(mySeat.stack)}
             </div>
           </>
         )}
@@ -345,7 +346,7 @@ function RebuyModal({
         <h3 className="text-lg font-semibold mb-2">Rebuy</h3>
         <div className="flex justify-between text-sm text-white/70 mb-1">
           <span>Amount</span>
-          <span className="font-mono">{amount.toLocaleString()}</span>
+          <span className="font-mono">{formatChips(amount)}</span>
         </div>
         <input
           type="range"
@@ -365,7 +366,7 @@ function RebuyModal({
             disabled={busy}
             className="flex-1 py-2 rounded-md bg-chip-gold text-black font-semibold disabled:opacity-50"
           >
-            {busy ? "…" : `Rebuy ${amount.toLocaleString()}`}
+            {busy ? "…" : `Rebuy ${formatChips(amount)}`}
           </button>
         </div>
         {error && <div className="text-sm text-red-300 mt-2">{error}</div>}

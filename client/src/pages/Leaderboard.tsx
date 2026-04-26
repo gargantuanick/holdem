@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import type { LeaderboardEntry } from "@holdem/shared";
 import { serverUrl } from "../lib/socket";
 import { ProfileModal } from "../components/ProfileModal";
+import { formatChips } from "../lib/format";
 
 type SortKey = "wallet" | "won" | "hands_won";
 
@@ -77,7 +78,9 @@ export function LeaderboardPage() {
                 </div>
               </div>
               <div className="font-mono">
-                {(e[tabConf.col] as number).toLocaleString()}
+                {tab === "hands_won"
+                  ? (e[tabConf.col] as number).toLocaleString()
+                  : formatChips(e[tabConf.col] as number)}
               </div>
             </button>
           </li>

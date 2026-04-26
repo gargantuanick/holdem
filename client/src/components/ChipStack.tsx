@@ -1,3 +1,5 @@
+import { formatChips } from "../lib/format";
+
 export function ChipStack({
   amount,
   small = false,
@@ -13,7 +15,7 @@ export function ChipStack({
       } font-mono animate-chip-pop`}
     >
       <span className="w-2 h-2 rounded-full bg-chip-gold" />
-      {amount.toLocaleString()}
+      {formatChips(amount)}
     </div>
   );
 }

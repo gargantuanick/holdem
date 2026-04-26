@@ -1,6 +1,7 @@
 import type { PublicSeat, Winner } from "@holdem/shared";
 import { PlayingCard } from "./Card";
 import { ChipStack } from "./ChipStack";
+import { formatChips } from "../lib/format";
 
 interface Props {
   seat: PublicSeat;
@@ -80,7 +81,7 @@ export function Seat({
         {seat.username}
       </button>
       <div className="text-[11px] font-mono text-white/80">
-        {seat.stack.toLocaleString()}
+        {formatChips(seat.stack)}
       </div>
       {seat.betThisStreet > 0 && (
         <div className="absolute -bottom-3">

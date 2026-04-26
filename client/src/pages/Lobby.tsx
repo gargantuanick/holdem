@@ -6,6 +6,7 @@ import { useSession } from "../hooks/useSession";
 import { WalletBadge } from "../components/WalletBadge";
 import { CreateTableModal } from "../components/CreateTableModal";
 import { JoinTableModal } from "../components/JoinTableModal";
+import { formatChips } from "../lib/format";
 
 export function LobbyPage() {
   const { profile, wallet, logout, setWallet } = useSession();
@@ -51,7 +52,7 @@ export function LobbyPage() {
       setRefillBusy(false);
       if (res.ok) {
         setWallet(res.wallet);
-        setRefillMsg("Refilled! +1,000 chips");
+        setRefillMsg("Refilled! +$1,000");
       } else {
         if (res.nextRefillAt) {
           setRefillMsg(
@@ -110,7 +111,7 @@ export function LobbyPage() {
                 onClick={requestRefill}
                 className="mt-2 rounded-md bg-chip-gold text-black font-semibold px-3 py-2 text-sm disabled:opacity-50"
               >
-                {refillBusy ? "Requesting…" : "Claim 1,000 chips"}
+                {refillBusy ? "Requesting…" : "Claim $1,000"}
               </button>
               {refillMsg && (
                 <div className="mt-2 text-xs text-white/70">{refillMsg}</div>
@@ -150,7 +151,7 @@ export function LobbyPage() {
                   <div>
                     <div className="font-semibold">{t.name}</div>
                     <div className="text-xs text-white/60">
-                      {t.smallBlind}/{t.bigBlind} blinds · buy-in {t.minBuyIn}–{t.maxBuyIn}
+                      {formatChips(t.smallBlind)}/{formatChips(t.bigBlind)} blinds · buy-in {formatChips(t.minBuyIn)}–{formatChips(t.maxBuyIn)}
                     </div>
                   </div>
                   <div className="text-right">

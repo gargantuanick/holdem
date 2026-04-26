@@ -47,19 +47,40 @@ export function BettingControls({ state, tableId, localPlayerId }: Props) {
     getSocket().emit("table:action", { tableId: tid, action });
   }
 
-  const potNow = state.totalPot + toCall; // if I just called, the pot becomes this
+  // Standard pot-size raise math: a "pot-size raise" is currentBet + the
+  // size of the pot AFTER you call. Pot-after-call = totalPot + toCall, and
+  // your raise size = (totalPot + 2*toCall). So:
+  //   pot-raise total = currentBet + totalPot + 2*toCall
+  // For an opening bet (currentBet === 0), pot-size = totalPot.
   const quickButtons = useMemo(() => {
-    const half = Math.max(minRaiseTotal, Math.floor(potNow / 2));
-    const pot = Math.max(minRaiseTotal, potNow);
-    const twoX = Math.max(minRaiseTotal, potNow * 2);
-    const allin = maxRaiseTotal;
+    const potAfterCall = state.totalPot + toCall;
+    const fullPotRaise =
+      state.currentBet === 0
+        ? state.totalPot
+        : state.currentBet + potAfterCall + toCall;
+    const halfPotRaise =
+      state.currentBet === 0
+        ? Math.floor(state.totalPot / 2)
+        : state.currentBet + Math.floor((potAfterCall + toCall) / 2);
+    const twoXPotRaise =
+      state.currentBet === 0
+        ? state.totalPot * 2
+        : state.currentBet + (potAfterCall + toCall) * 2;
+    const clamp = (v: number) =>
+      Math.max(minRaiseTotal, Math.min(maxRaiseTotal, v));
     return [
-      { label: "½ pot", value: Math.min(allin, half) },
-      { label: "pot", value: Math.min(allin, pot) },
-      { label: "2× pot", value: Math.min(allin, twoX) },
-      { label: "all-in", value: allin },
+      { label: "½ pot", value: clamp(halfPotRaise) },
+      { label: "pot", value: clamp(fullPotRaise) },
+      { label: "2× pot", value: clamp(twoXPotRaise) },
+      { label: "all-in", value: maxRaiseTotal },
     ];
-  }, [minRaiseTotal, potNow, maxRaiseTotal]);
+  }, [
+    minRaiseTotal,
+    maxRaiseTotal,
+    state.totalPot,
+    state.currentBet,
+    toCall,
+  ]);
 
   // Disabled state until our turn
   const dim = !isMyTurn;
@@ -149,10 +170,14 @@ export function BettingControls({ state, tableId, localPlayerId }: Props) {
           {canCheck ? "Check" : `Call ${toCall.toLocaleString()}`}
         </button>
         <button
-          disabled={dim || maxRaiseTotal <= state.currentBet}
+          disabled={
+            dim ||
+            maxRaiseTotal <= state.currentBet ||
+            (seat ? !seat.canStillRaise : true)
+          }
           onClick={() => setRaiseUiOpen((v) => !v)}
           className={`min-h-[52px] rounded-lg font-bold text-sm ${
-            dim
+            dim || (seat && !seat.canStillRaise)
               ? "bg-white/5 text-white/30"
               : "bg-green-700/80 hover:bg-green-700 text-white active:scale-[0.98]"
           }`}

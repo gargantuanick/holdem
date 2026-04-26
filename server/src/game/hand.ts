@@ -35,6 +35,14 @@ export interface HandSeatState {
   hasFolded: boolean;
   isAllIn: boolean;
   hasActedThisStreet: boolean;
+  /**
+   * True if this seat is still allowed to bet/raise on the current street.
+   * Reset to true at the start of every street and whenever a *full* raise
+   * (>= minRaise) reopens action. An undersized all-in raise does NOT reopen
+   * action: prior matched actors keep canStillRaise=false and may only
+   * call/fold the extra chips.
+   */
+  canStillRaise: boolean;
 }
 
 export interface HandConfig {
@@ -101,6 +109,7 @@ export class HandEngine {
         hasFolded: false,
         isAllIn: false,
         hasActedThisStreet: false,
+        canStillRaise: true,
       };
     });
 
@@ -203,41 +212,57 @@ export class HandEngine {
       }
       case "bet": {
         if (this.currentBet > 0) throw new Error("cannot bet; raise instead");
-        const total = action.amount ?? 0;
-        if (total < this.config.bigBlind && total < seat.stack + seat.betThisStreet) {
-          throw new Error("bet must be at least one big blind");
+        if (!seat.canStillRaise) {
+          throw new Error("action not reopened; cannot bet");
         }
+        const total = action.amount ?? 0;
         const delta = total - seat.betThisStreet;
         if (delta <= 0) throw new Error("bet must increase total");
         if (delta > seat.stack) throw new Error("bet exceeds stack");
+        // Min open is 1 BB unless this is the player's entire stack (all-in).
+        if (total < this.config.bigBlind && delta < seat.stack) {
+          throw new Error("bet must be at least one big blind");
+        }
         this.commit(seat, delta);
         this.currentBet = seat.betThisStreet;
         this.minRaise = total;
         this.lastAggressor = seat.seatIndex;
-        this.resetActedFlagsExcept(seat.seatIndex);
+        this.reopenActionExcept(seat.seatIndex);
         seat.hasActedThisStreet = true;
+        seat.canStillRaise = false; // can't raise their own bet
         break;
       }
       case "raise": {
         if (this.currentBet === 0) throw new Error("cannot raise; bet instead");
+        if (!seat.canStillRaise) {
+          throw new Error("action not reopened; you may only call or fold");
+        }
         const total = action.amount ?? 0;
         const raiseSize = total - this.currentBet;
-        const isAllInShort = total === seat.stack + seat.betThisStreet && raiseSize < this.minRaise;
-        if (!isAllInShort && raiseSize < this.minRaise) {
-          throw new Error("raise smaller than min-raise");
-        }
         const delta = total - seat.betThisStreet;
         if (delta <= 0) throw new Error("raise must increase total");
         if (delta > seat.stack) throw new Error("raise exceeds stack");
+        const isAllIn = delta === seat.stack;
+        // Undersized raises are only allowed when going all-in.
+        if (raiseSize < this.minRaise && !isAllIn) {
+          throw new Error("raise smaller than min-raise");
+        }
         this.commit(seat, delta);
-        // Only "full" raises reopen action and update minRaise.
         if (raiseSize >= this.minRaise) {
+          // Full raise — reopens action for everyone else.
           this.minRaise = raiseSize;
           this.lastAggressor = seat.seatIndex;
-          this.resetActedFlagsExcept(seat.seatIndex);
+          this.reopenActionExcept(seat.seatIndex);
+        } else {
+          // Short all-in raise — bumps currentBet but does NOT reopen action
+          // for players who've already matched the prior bet. Players whose
+          // betThisStreet < new currentBet still need to call/fold the extra
+          // chips, but they cannot re-raise.
+          this.partialBumpAfterShortAllIn(seat.seatIndex);
         }
         this.currentBet = seat.betThisStreet;
         seat.hasActedThisStreet = true;
+        seat.canStillRaise = false;
         break;
       }
       case "allin": {
@@ -247,19 +272,19 @@ export class HandEngine {
         this.commit(seat, delta);
         if (newTotal > this.currentBet) {
           const raiseSize = newTotal - this.currentBet;
-          if (raiseSize >= this.minRaise || this.currentBet === 0) {
-            // full raise (or opening bet)
-            if (this.currentBet === 0) {
-              this.minRaise = newTotal;
-            } else {
-              this.minRaise = raiseSize;
-            }
+          const isFullRaise = raiseSize >= this.minRaise || this.currentBet === 0;
+          if (isFullRaise) {
+            this.minRaise = this.currentBet === 0 ? newTotal : raiseSize;
             this.lastAggressor = seat.seatIndex;
-            this.resetActedFlagsExcept(seat.seatIndex);
+            this.reopenActionExcept(seat.seatIndex);
+          } else {
+            // Short all-in — see comment in `raise` case above.
+            this.partialBumpAfterShortAllIn(seat.seatIndex);
           }
           this.currentBet = newTotal;
         }
         seat.hasActedThisStreet = true;
+        seat.canStillRaise = false;
         break;
       }
       default:
@@ -290,10 +315,36 @@ export class HandEngine {
     if (seat.stack === 0) seat.isAllIn = true;
   }
 
-  private resetActedFlagsExcept(seatIndex: number) {
+  /**
+   * A FULL raise/bet reopens action: every other live, non-all-in seat must
+   * act again and is once again allowed to re-raise.
+   */
+  private reopenActionExcept(seatIndex: number) {
     for (const s of this.seats) {
       if (s.seatIndex !== seatIndex && !s.hasFolded && !s.isAllIn) {
         s.hasActedThisStreet = false;
+        s.canStillRaise = true;
+      }
+    }
+  }
+
+  /**
+   * A SHORT all-in (raise size < minRaise) bumps currentBet but does NOT
+   * reopen action: players who already matched the prior bet must call/fold
+   * the extra chips, but cannot re-raise. We re-set hasActed=false on those
+   * players so the engine routes back to them, but lock canStillRaise=false.
+   * Players who hadn't yet matched the prior bet (still owed chips) keep
+   * their existing flags — they were already required to act.
+   */
+  private partialBumpAfterShortAllIn(seatIndex: number) {
+    const newBet = this.getSeat(seatIndex)!.betThisStreet;
+    for (const s of this.seats) {
+      if (s.seatIndex === seatIndex) continue;
+      if (s.hasFolded || s.isAllIn) continue;
+      if (s.betThisStreet < newBet) {
+        // Need to call (or fold) the extra; lose right to raise.
+        s.hasActedThisStreet = false;
+        s.canStillRaise = false;
       }
     }
   }
@@ -326,7 +377,9 @@ export class HandEngine {
   private nextLiveSeatAfter(seatIndex: number): HandSeatState {
     const ordered = orderFromAfterDealer(this.seats, this.dealerSeatIndex);
     const startIdx = ordered.findIndex((s) => s.seatIndex === seatIndex);
-    if (startIdx < 0) return ordered[0] as HandSeatState;
+    if (startIdx < 0) {
+      throw new Error(`nextLiveSeatAfter: seat ${seatIndex} not in hand`);
+    }
     for (let i = 1; i <= ordered.length; i++) {
       const s = ordered[(startIdx + i) % ordered.length]!;
       const seat = this.getSeat(s.seatIndex)!;
@@ -342,6 +395,7 @@ export class HandEngine {
     for (const s of this.seats) {
       s.betThisStreet = 0;
       s.hasActedThisStreet = false;
+      s.canStillRaise = true;
     }
     this.currentBet = 0;
     this.minRaise = this.config.bigBlind;

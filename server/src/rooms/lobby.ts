@@ -135,7 +135,9 @@ export class Lobby {
     if (args.buyIn > table.config.maxBuyIn) {
       throw new Error(`buy-in above table maximum`);
     }
-    // Debit first; if seating fails, refund.
+    // Debit first; if seating fails, refund (with retry — if the credit
+    // itself fails we must NOT lose the player's chips, so loop with backoff
+    // and ultimately log a hard error for manual reconciliation).
     const newWallet = await debitWallet(args.playerId, args.buyIn);
     try {
       table.sitDown({
@@ -145,7 +147,7 @@ export class Lobby {
         seatIndex: args.seatIndex,
       });
     } catch (err) {
-      await creditWallet(args.playerId, args.buyIn);
+      await refundWithRetry(args.playerId, args.buyIn);
       throw err;
     }
     // Increment tables_joined once per session per table.
@@ -242,7 +244,7 @@ export class Lobby {
       }
       return { wallet: newWallet, stack };
     } catch (err) {
-      await creditWallet(args.playerId, args.amount);
+      await refundWithRetry(args.playerId, args.amount);
       throw err;
     }
   }
@@ -303,20 +305,28 @@ export class Lobby {
       }
     }
 
-    // 4) Process pending leaves: any seat with pendingLeave → cashOut now.
+    // 4) Process pending leaves: any seat with pendingLeave is a player who
+    //    called table:leave (or was disconnected past their grace) during the
+    //    just-finished hand. Now that the hand is over, actually remove the
+    //    seat and credit their stack back to their wallet.
     for (const seat of table.seats) {
-      if (
-        seat.playerId !== null &&
-        // pendingLeave is reset before this hook runs; we instead detect "wants
-        // to leave" via stale flags. Simpler: track via seat.sittingOut + cashOut
-        // sentinel. For now, if a seat is empty stack + sittingOut, leave it.
-        seat.stack === 0 &&
-        seat.sittingOut === false &&
-        // Player chose to leave: we encoded that as table.standUp setting
-        // pendingLeave during the hand. Already handled in finishHand path.
-        false
-      ) {
-        // no-op
+      if (!seat.pendingLeave || seat.playerId === null) continue;
+      const playerId = seat.playerId;
+      const stack = table.removeSeat(seat);
+      if (stack > 0) {
+        try {
+          const newWallet = await creditWallet(playerId, stack);
+          // Push the updated wallet to the leaving player's socket if still connected.
+          const sockets = await this.io.fetchSockets();
+          for (const s of sockets) {
+            if ((s.data as { playerId?: number | null }).playerId === playerId) {
+              s.emit("wallet:update", newWallet);
+              s.leave(table.config.id);
+            }
+          }
+        } catch (err) {
+          console.error("[lobby] pendingLeave credit failed:", err);
+        }
       }
     }
 
@@ -354,4 +364,26 @@ export class Lobby {
       }
     }
   }
+}
+
+/**
+ * Best-effort wallet refund: retries up to 5 times with exponential backoff
+ * before logging a hard error. Used by buyIn/rebuy rollback paths so we
+ * don't silently strand a player's chips on a transient DB hiccup.
+ */
+async function refundWithRetry(playerId: number, amount: number): Promise<void> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      await creditWallet(playerId, amount);
+      return;
+    } catch (err) {
+      lastErr = err;
+      await new Promise((r) => setTimeout(r, 50 * Math.pow(2, attempt)));
+    }
+  }
+  console.error(
+    `[lobby] CRITICAL: refund of ${amount} chips for player ${playerId} failed after 5 attempts:`,
+    lastErr,
+  );
 }

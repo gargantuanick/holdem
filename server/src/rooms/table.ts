@@ -42,6 +42,8 @@ export interface TableSeat {
   pendingLeave: boolean;
   /** True if this player has clicked "Start" while waiting for the first hand. */
   ready: boolean;
+  /** Mirror of HandSeatState.canStillRaise; default true outside a hand. */
+  canStillRaise: boolean;
 }
 
 export interface TableEvents {
@@ -89,6 +91,7 @@ export class Table {
       showCardsAtShowdown: false,
       pendingLeave: false,
       ready: false,
+      canStillRaise: true,
     }));
   }
 
@@ -174,6 +177,7 @@ export class Table {
       s.hasFolded = false;
       s.isAllIn = false;
       s.pendingLeave = false;
+      s.canStillRaise = true;
     }
     this.events.onStateChange(this);
   }
@@ -195,6 +199,7 @@ export class Table {
     seat.pendingLeave = false;
     seat.isConnected = true;
     seat.ready = false;
+    seat.canStillRaise = true;
     this.events.onStateChange(this);
     return stack;
   }
@@ -250,35 +255,43 @@ export class Table {
         s.stack >= this.config.bigBlind, // need at least BB to be dealt in
     );
     if (eligible.length < 2) return false;
-    // For the first hand, every eligible player must press Start so we don't
-    // deal in someone who's still waiting for friends to join.
-    if (this.handNumber === 0 && eligible.some((s) => !s.ready)) {
-      return false;
+    // First-hand gate: at least 2 ready players. Non-ready players are
+    // simply not dealt in for hand #1 (they keep their seat; pressing
+    // Start later will deal them in on the next hand). This avoids an
+    // AFK joiner griefing the table by never clicking Start.
+    if (this.handNumber === 0) {
+      const ready = eligible.filter((s) => s.ready);
+      if (ready.length < 2) return false;
     }
     return true;
   }
 
   startHand(): void {
     if (this.engine) throw new Error("hand in progress");
-    const eligible = this.seats.filter(
+    let eligible = this.seats.filter(
       (s) =>
         s.playerId !== null &&
         !s.sittingOut &&
         s.stack >= this.config.bigBlind,
     );
+    // For the first hand, only deal in players who pressed Start. After
+    // hand #1, everyone seated and not sitting-out is dealt in.
+    if (this.handNumber === 0) {
+      eligible = eligible.filter((s) => s.ready);
+    }
     if (eligible.length < 2) throw new Error("not enough players");
 
     this.handNumber++;
-    // Choose dealer: rotate clockwise from previous dealer (or pick first eligible).
+    // Choose dealer: rotate clockwise from the previous dealer's seat
+    // position, even if that player is no longer eligible (dead-button
+    // approximation).
     const sortedEligible = eligible.sort((a, b) => a.seatIndex - b.seatIndex);
-    if (
-      this.dealerSeatIndex === null ||
-      !sortedEligible.find((s) => s.seatIndex === this.dealerSeatIndex)
-    ) {
+    if (this.dealerSeatIndex === null) {
       this.dealerSeatIndex = sortedEligible[0]!.seatIndex;
     } else {
-      // pick next eligible after current dealer
       const cur = this.dealerSeatIndex;
+      // Next eligible seatIndex strictly greater than the previous dealer's
+      // seatIndex; wrap around if none.
       const after = sortedEligible.find((s) => s.seatIndex > cur);
       this.dealerSeatIndex = (after ?? sortedEligible[0]!).seatIndex;
     }
@@ -298,6 +311,7 @@ export class Table {
       s.totalCommitted = 0;
       s.hasFolded = false;
       s.isAllIn = false;
+      s.canStillRaise = true;
     }
 
     this.engine = new HandEngine(
@@ -349,10 +363,25 @@ export class Table {
     const toCall = this.engine.currentBet - eseat.betThisStreet;
     const action: PlayerAction =
       toCall === 0 ? { type: "check" } : { type: "fold" };
+    // Try check (if free) or fold; if the first attempt throws, force a
+    // fold. If even that fails, abort the hand to avoid getting stuck on
+    // the same seat forever.
     try {
       this.engine.applyAction(seatIndex, action);
-    } catch {
-      // ignore
+    } catch (err1) {
+      try {
+        this.engine.applyAction(seatIndex, { type: "fold" });
+      } catch (err2) {
+        console.error(
+          "[table] forceTimeoutAction: engine refused both",
+          action.type,
+          "and fold:",
+          err1,
+          err2,
+        );
+        this.abortHand();
+        return;
+      }
     }
     // Auto-sit-out the player who timed out so they don't keep timing out.
     const ts = this.seats[seatIndex];
@@ -376,6 +405,7 @@ export class Table {
       ts.totalCommitted = eseat.totalCommitted;
       ts.hasFolded = eseat.hasFolded;
       ts.isAllIn = eseat.isAllIn;
+      ts.canStillRaise = eseat.canStillRaise;
     }
   }
 
@@ -431,15 +461,8 @@ export class Table {
     this.clearActionTimer();
     this.actionDeadline = null;
 
-    // Process pending leaves.
-    for (const ts of this.seats) {
-      if (ts.pendingLeave) {
-        // Fire onStateChange before/after; outer host handles wallet credit.
-        ts.pendingLeave = false;
-        // Don't actually remove here — host receives via state and triggers cashOut+removeSeat.
-      }
-    }
-
+    // pendingLeave is intentionally preserved here — the lobby reads it in
+    // its handleHandFinished hook to actually removeSeat + creditWallet.
     this.engine = null;
     this.events.onHandFinished(this, payload);
     this.events.onStateChange(this);
@@ -541,6 +564,7 @@ export class Table {
         sittingOut: s.sittingOut,
         isConnected: s.isConnected,
         ready: s.ready,
+        canStillRaise: s.canStillRaise,
         holeCards: showHole ? s.holeCards : null,
         hasCards: s.inCurrentHand && !s.hasFolded && s.holeCards !== null,
       };

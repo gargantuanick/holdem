@@ -35,12 +35,24 @@ export function TablePage() {
     getSocket().emit("table:requestState", { tableId });
   }, [tableId]);
 
-  // If no state arrives within 3s, the table doesn't exist (e.g. server
-  // restart wiped in-memory state). Bounce back to lobby.
+  // If no state arrives, bounce back to lobby — but only after the socket
+  // has connected (otherwise we'd boot players on slow networks before
+  // their socket has even handshaken). 10s after connection is generous
+  // enough to cover round-trip + a server warm boot.
   useEffect(() => {
     if (state) return;
-    const id = setTimeout(() => navigate("/lobby", { replace: true }), 3000);
-    return () => clearTimeout(id);
+    const sock = getSocket();
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const arm = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => navigate("/lobby", { replace: true }), 10_000);
+    };
+    if (sock.connected) arm();
+    sock.on("connect", arm);
+    return () => {
+      if (timer) clearTimeout(timer);
+      sock.off("connect", arm);
+    };
   }, [state, navigate]);
 
   // Track unseen chat

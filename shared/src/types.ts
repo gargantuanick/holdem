@@ -29,6 +29,12 @@ export interface PublicSeat {
   isConnected: boolean;
   /** True if this player has hit "Start" while waiting for the first hand. */
   ready: boolean;
+  /**
+   * True if this seat is allowed to bet/raise on the current street. False
+   * after a short all-in capped their action, in which case they can only
+   * call/fold (the UI should disable the raise button).
+   */
+  canStillRaise: boolean;
   // hole cards: only present in personalized payload for the seat owner
   holeCards?: [Card, Card] | null;
   hasCards: boolean; // whether this seat has been dealt cards this hand

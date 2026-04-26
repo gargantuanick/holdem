@@ -102,6 +102,8 @@ describe("Table — hand lifecycle", () => {
     const t = new Table(cfg, noopEvents);
     t.sitDown({ playerId: 1, username: "a", buyIn: 200 });
     t.sitDown({ playerId: 2, username: "b", buyIn: 200 });
+    t.setReady(1, true);
+    t.setReady(2, true);
     t.startHand();
     const stateForP1 = t.publicState(1);
     const ownSeat = stateForP1.seats.find((s) => s.playerId === 1)!;
@@ -115,6 +117,8 @@ describe("Table — hand lifecycle", () => {
     const t = new Table(cfg, noopEvents);
     t.sitDown({ playerId: 1, username: "a", buyIn: 200 });
     t.sitDown({ playerId: 2, username: "b", buyIn: 200 });
+    t.setReady(1, true);
+    t.setReady(2, true);
     t.startHand();
     const firstDealer = t.dealerSeatIndex;
     // Force-finish: fold the non-dealer (heads-up SB acts first which is dealer)
@@ -132,6 +136,8 @@ describe("Table — hand lifecycle", () => {
     const t = new Table(cfg, noopEvents);
     t.sitDown({ playerId: 1, username: "a", buyIn: 200 });
     t.sitDown({ playerId: 2, username: "b", buyIn: 200 });
+    t.setReady(1, true);
+    t.setReady(2, true);
     t.startHand();
     const result = t.standUp(2);
     expect(result.deferred).toBe(true);
@@ -146,6 +152,8 @@ describe("Table — chip conservation across hands", () => {
     t.sitDown({ playerId: 1, username: "a", buyIn: 200 });
     t.sitDown({ playerId: 2, username: "b", buyIn: 200 });
     const total = 400;
+    t.setReady(1, true);
+    t.setReady(2, true);
     t.startHand();
     // Fold the to-act player to end immediately.
     while (t.engine) {

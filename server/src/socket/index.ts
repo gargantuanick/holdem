@@ -240,6 +240,14 @@ export function registerSocketHandlers(
 
     sock.on("table:action", ({ tableId, action }) => {
       if (!sock.data.playerId) return;
+      if (!isValidAction(action)) {
+        sock.emit("error", "invalid action payload");
+        return;
+      }
+      if (!takeActionToken(sock.id)) {
+        sock.emit("error", "rate limited; slow down");
+        return;
+      }
       const table = lobby.getTable(tableId);
       if (!table) return;
       try {
@@ -253,8 +261,12 @@ export function registerSocketHandlers(
       if (!sock.data.playerId) return;
       const table = lobby.getTable(tableId);
       if (!table) return;
+      // Only meaningful while the requester is actually in the current
+      // hand and there's an active engine. Otherwise ignore the request so
+      // the flag doesn't leak across hands.
+      if (!table.engine) return;
       const seat = table.findSeatByPlayer(sock.data.playerId);
-      if (seat) {
+      if (seat && seat.inCurrentHand && !seat.hasFolded) {
         seat.showCardsAtShowdown = true;
       }
     });
@@ -317,6 +329,7 @@ export function registerSocketHandlers(
     });
 
     sock.on("disconnect", async () => {
+      actionBuckets.delete(sock.id);
       const pid = sock.data.playerId;
       if (pid != null) {
         // Only handle disconnect if THIS socket was the active one (avoid the
@@ -347,6 +360,56 @@ function kickPriorSocket(io: Server, playerId: number, currentSocketId: string) 
 function errorMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
   return String(err);
+}
+
+const VALID_ACTION_TYPES = new Set([
+  "fold",
+  "check",
+  "call",
+  "bet",
+  "raise",
+  "allin",
+]);
+
+function isValidAction(action: unknown): boolean {
+  if (!action || typeof action !== "object") return false;
+  const a = action as { type?: unknown; amount?: unknown };
+  if (typeof a.type !== "string" || !VALID_ACTION_TYPES.has(a.type)) {
+    return false;
+  }
+  if (a.type === "bet" || a.type === "raise") {
+    if (typeof a.amount !== "number") return false;
+    if (!Number.isFinite(a.amount)) return false;
+    if (a.amount <= 0) return false;
+    // Cap at a generous sanity limit (10^9) to keep engine math safe.
+    if (a.amount > 1_000_000_000) return false;
+  }
+  return true;
+}
+
+// Per-socket token bucket: ACTION_TOKEN_BURST tokens, refill at
+// ACTION_TOKEN_RATE per second. Buys cheap protection against a misbehaving
+// or malicious client spamming table:action.
+const ACTION_TOKEN_BURST = 6;
+const ACTION_TOKEN_RATE = 4; // tokens per second
+const actionBuckets = new Map<string, { tokens: number; lastRefill: number }>();
+
+function takeActionToken(socketId: string): boolean {
+  const now = Date.now();
+  let bucket = actionBuckets.get(socketId);
+  if (!bucket) {
+    bucket = { tokens: ACTION_TOKEN_BURST, lastRefill: now };
+    actionBuckets.set(socketId, bucket);
+  }
+  const elapsed = (now - bucket.lastRefill) / 1000;
+  bucket.tokens = Math.min(
+    ACTION_TOKEN_BURST,
+    bucket.tokens + elapsed * ACTION_TOKEN_RATE,
+  );
+  bucket.lastRefill = now;
+  if (bucket.tokens < 1) return false;
+  bucket.tokens -= 1;
+  return true;
 }
 
 // Logout endpoint to invalidate session token; not exposed via socket since

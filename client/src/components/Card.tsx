@@ -26,9 +26,9 @@ export function PlayingCard({
   glow?: boolean;
 }) {
   const sizes = {
-    sm: "w-7 h-10 text-[12px]",
-    md: "w-10 h-14 text-base",
-    lg: "w-14 h-20 text-xl",
+    sm: "w-9 h-[3.25rem] text-sm",
+    md: "w-12 h-[4.25rem] text-lg",
+    lg: "w-16 h-[5.75rem] text-2xl",
   };
   if (faceDown || !card) {
     return (

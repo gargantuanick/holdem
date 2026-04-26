@@ -58,12 +58,16 @@ export function Seat({
         </div>
       )}
 
-      <div className="flex gap-0.5 mb-1 h-12">
+      <div
+        className={`flex gap-1 mb-1 ${
+          isLocal ? "h-[4.25rem]" : "h-[3.25rem]"
+        }`}
+      >
         {seat.hasCards ? (
           isLocal && seat.holeCards ? (
             <>
-              <PlayingCard card={seat.holeCards[0]} size="sm" />
-              <PlayingCard card={seat.holeCards[1]} size="sm" />
+              <PlayingCard card={seat.holeCards[0]} size="md" />
+              <PlayingCard card={seat.holeCards[1]} size="md" />
             </>
           ) : (
             <>

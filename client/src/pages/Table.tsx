@@ -88,8 +88,10 @@ export function TablePage() {
     getSocket().emit("table:setReady", { tableId, ready });
   };
 
-  // "Start game" gate shows before hand 1 — let players wait for friends and
-  // explicitly press Start before the deal happens.
+  // Start gate: shown to any seated player who isn't currently in a hand.
+  // Hides once you're dealt in — BettingControls takes over from there.
+  // Stays visible after you press Start so you get "Waiting for opponents"
+  // feedback until the deal happens.
   const seatedPlayers = state?.seats.filter((s) => s.playerId !== null) ?? [];
   const eligiblePlayers = state
     ? seatedPlayers.filter(
@@ -98,7 +100,7 @@ export function TablePage() {
     : [];
   const readyCount = eligiblePlayers.filter((s) => s.ready).length;
   const showStartGate =
-    !!state && state.handNumber === 0 && !!mySeat && state.street === "idle";
+    !!state && !!mySeat && !mySeat.sittingOut && !mySeat.hasCards;
 
   return (
     <div className="min-h-full w-full bg-felt-900 text-white relative pb-[120px] safe-top">
@@ -221,7 +223,9 @@ export function TablePage() {
           <div className="rounded-xl bg-felt-800 border border-white/15 p-3">
             <div className="flex items-center justify-between mb-2">
               <div>
-                <div className="font-semibold">Waiting to start</div>
+                <div className="font-semibold">
+                  {mySeat.ready ? "Waiting for opponents" : "Ready up to play"}
+                </div>
                 <div className="text-xs text-white/60">
                   {readyCount} of {eligiblePlayers.length} ready
                   {eligiblePlayers.length < 2 && " · need 2+ players"}

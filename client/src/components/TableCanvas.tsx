@@ -27,27 +27,27 @@ export function TableCanvas({
   const arranged = arrangeForBottomLocal(seats, localIdx);
 
   return (
-    <div className="relative w-full aspect-[3/4] max-h-[60dvh] mx-auto">
+    <div className="relative w-full aspect-[3/4] max-h-[68dvh] mx-auto">
       {/* Felt */}
       <div className="absolute inset-2 rounded-[40%/30%] bg-gradient-to-b from-felt-700 to-felt-900 border-4 border-felt-500/50 shadow-inner" />
       <div className="absolute inset-4 rounded-[40%/30%] border border-white/10" />
 
       {/* Community cards + pot in the center */}
-      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 pointer-events-none">
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-2 pointer-events-none">
         <div className="text-[10px] uppercase tracking-widest text-white/40">
           {state.street === "idle"
             ? "waiting"
             : `Hand #${state.handNumber} · ${state.street}`}
         </div>
-        <div className="flex gap-1">
+        <div className="flex gap-1.5 max-w-full">
           {Array.from({ length: 5 }).map((_, i) => {
             const card = state.communityCards[i];
             return card ? (
-              <PlayingCard key={i} card={card} size="md" />
+              <PlayingCard key={i} card={card} size="lg" />
             ) : (
               <div
                 key={i}
-                className="w-10 h-14 rounded-md border border-white/10 bg-white/5"
+                className="w-16 h-[5.75rem] rounded-md border border-white/10 bg-white/5"
               />
             );
           })}

@@ -248,37 +248,29 @@ export class Table {
 
   canStartHand(): boolean {
     if (this.engine) return false;
+    // Players must press Start to be dealt in — applies to every hand, not
+    // just hand 1. Newly joined players default to ready=false so they
+    // spectate the current hand and are dealt in next hand once they ready
+    // up. Existing players keep ready=true across hands until they leave.
     const eligible = this.seats.filter(
       (s) =>
         s.playerId !== null &&
         !s.sittingOut &&
-        s.stack >= this.config.bigBlind, // need at least BB to be dealt in
+        s.ready &&
+        s.stack >= this.config.bigBlind,
     );
-    if (eligible.length < 2) return false;
-    // First-hand gate: at least 2 ready players. Non-ready players are
-    // simply not dealt in for hand #1 (they keep their seat; pressing
-    // Start later will deal them in on the next hand). This avoids an
-    // AFK joiner griefing the table by never clicking Start.
-    if (this.handNumber === 0) {
-      const ready = eligible.filter((s) => s.ready);
-      if (ready.length < 2) return false;
-    }
-    return true;
+    return eligible.length >= 2;
   }
 
   startHand(): void {
     if (this.engine) throw new Error("hand in progress");
-    let eligible = this.seats.filter(
+    const eligible = this.seats.filter(
       (s) =>
         s.playerId !== null &&
         !s.sittingOut &&
+        s.ready &&
         s.stack >= this.config.bigBlind,
     );
-    // For the first hand, only deal in players who pressed Start. After
-    // hand #1, everyone seated and not sitting-out is dealt in.
-    if (this.handNumber === 0) {
-      eligible = eligible.filter((s) => s.ready);
-    }
     if (eligible.length < 2) throw new Error("not enough players");
 
     this.handNumber++;

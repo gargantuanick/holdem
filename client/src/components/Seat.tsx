@@ -97,9 +97,45 @@ export function Seat({
           all-in
         </div>
       )}
+      {seat.lastAction && (
+        <ActionPill action={seat.lastAction} />
+      )}
       {isToAct && actionDeadline !== null && (
         <TimerBar deadline={actionDeadline} />
       )}
+    </div>
+  );
+}
+
+const PILL_STYLES: Record<string, { label: string; cls: string }> = {
+  fold: { label: "Fold", cls: "bg-red-700/90 text-white" },
+  check: { label: "Check", cls: "bg-blue-700/90 text-white" },
+  call: { label: "Call", cls: "bg-blue-700/90 text-white" },
+  bet: { label: "Bet", cls: "bg-emerald-700/90 text-white" },
+  raise: { label: "Raise", cls: "bg-emerald-700/90 text-white" },
+  allin: { label: "All-in", cls: "bg-yellow-500 text-black" },
+};
+
+function ActionPill({
+  action,
+}: {
+  action: { type: string; amount?: number; at: number };
+}) {
+  const style = PILL_STYLES[action.type] ?? PILL_STYLES.fold;
+  const showAmount =
+    typeof action.amount === "number" &&
+    (action.type === "bet" ||
+      action.type === "raise" ||
+      action.type === "allin");
+  return (
+    <div
+      // Re-key on `at` so a new action restarts the animation even if the
+      // component is reused.
+      key={action.at}
+      className={`absolute -top-3 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider shadow whitespace-nowrap pointer-events-none animate-action-pill ${style!.cls}`}
+    >
+      {style!.label}
+      {showAmount ? ` ${action.amount!.toLocaleString()}` : ""}
     </div>
   );
 }

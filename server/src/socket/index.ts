@@ -316,9 +316,17 @@ export function registerSocketHandlers(
         const cleared = await lobby.adminForceClear(tableId);
         for (const pid of cleared) {
           const sid = activeSocketByPlayer.get(pid);
-          if (sid) {
-            io.to(sid).emit("error", "Table cleared by admin");
-          }
+          if (!sid) continue;
+          const targetSock = io.sockets.sockets.get(sid);
+          if (!targetSock) continue;
+          // Force the cleared player's socket out of the table room and tell
+          // their client to navigate back to the lobby — otherwise their
+          // TablePage is stuck on the now-empty table view.
+          targetSock.leave(tableId);
+          targetSock.emit("table:evicted", {
+            tableId,
+            reason: "Table cleared by admin",
+          });
         }
         cb({ ok: true, cleared: cleared.length });
       } catch (err) {

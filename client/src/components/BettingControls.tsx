@@ -86,6 +86,19 @@ export function BettingControls({ state, tableId, localPlayerId }: Props) {
   // Disabled state until our turn
   const dim = !isMyTurn;
 
+  // Short-stack edge case: I have chips left to raise (maxRaiseTotal >
+  // currentBet) but not enough for a full min-raise. The only legal "raise"
+  // is to shove all-in. Skip the slider and fire allin directly.
+  const onlyAllInRaiseLegal =
+    maxRaiseTotal > state.currentBet && maxRaiseTotal < minRaiseTotal;
+  const handleRaiseClick = () => {
+    if (onlyAllInRaiseLegal) {
+      socketAction({ type: "allin" }, tableId);
+      return;
+    }
+    setRaiseUiOpen((v) => !v);
+  };
+
   return (
     <div className="fixed bottom-0 inset-x-0 safe-bottom bg-felt-900/95 backdrop-blur border-t border-white/10 px-2 pt-2 pb-2 z-20">
       {raiseUiOpen && isMyTurn && (
@@ -176,14 +189,18 @@ export function BettingControls({ state, tableId, localPlayerId }: Props) {
             maxRaiseTotal <= state.currentBet ||
             (seat ? !seat.canStillRaise : true)
           }
-          onClick={() => setRaiseUiOpen((v) => !v)}
+          onClick={handleRaiseClick}
           className={`min-h-[52px] rounded-lg font-bold text-sm ${
             dim || (seat && !seat.canStillRaise)
               ? "bg-white/5 text-white/30"
               : "bg-green-700/80 hover:bg-green-700 text-white active:scale-[0.98]"
           }`}
         >
-          {state.currentBet === 0 ? "Bet" : "Raise"}
+          {onlyAllInRaiseLegal
+            ? `All-in ${formatChips(maxRaiseTotal)}`
+            : state.currentBet === 0
+              ? "Bet"
+              : "Raise"}
         </button>
       </div>
     </div>

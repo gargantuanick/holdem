@@ -35,6 +35,13 @@ export interface PublicSeat {
    * call/fold (the UI should disable the raise button).
    */
   canStillRaise: boolean;
+  /**
+   * Last action this player took in the current hand. Cleared on hand start
+   * and on street advance so the UI only flashes for the current decision.
+   * Drives the "Folded / Checked / Called X / Bet X / Raised X / All-in"
+   * action pill that fades on the seat after they act.
+   */
+  lastAction: { type: ActionType; amount?: number; at: number } | null;
   // hole cards: only present in personalized payload for the seat owner
   holeCards?: [Card, Card] | null;
   hasCards: boolean; // whether this seat has been dealt cards this hand
@@ -181,6 +188,7 @@ export interface ServerToClientEvents {
   "table:chat": (msg: ChatMessage) => void;
   "table:handFinished": (payload: HandFinishedPayload) => void;
   "table:history": (entries: HandHistoryEntry[]) => void;
+  "table:evicted": (payload: { tableId: string; reason: string }) => void;
   "wallet:update": (wallet: number) => void;
   "session:kicked": (reason: string) => void;
   "error": (msg: string) => void;

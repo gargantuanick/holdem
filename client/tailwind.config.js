@@ -41,12 +41,33 @@ export default {
           "40%": { transform: "scale(1.18)" },
           "100%": { transform: "scale(1)" },
         },
+        "action-pill": {
+          "0%": { transform: "translateY(-4px) scale(0.85)", opacity: "0" },
+          "12%": { transform: "translateY(0) scale(1.05)", opacity: "1" },
+          "20%": { transform: "translateY(0) scale(1)", opacity: "1" },
+          "85%": { transform: "translateY(0) scale(1)", opacity: "1" },
+          "100%": { transform: "translateY(-6px) scale(0.95)", opacity: "0" },
+        },
+        "chip-fly": {
+          "0%": { transform: "translate(0, 0) scale(1)", opacity: "0" },
+          "15%": { transform: "translate(0, 0) scale(1)", opacity: "1" },
+          "85%": {
+            transform: "var(--chip-fly-end, translate(0, -120px)) scale(0.9)",
+            opacity: "1",
+          },
+          "100%": {
+            transform: "var(--chip-fly-end, translate(0, -120px)) scale(0.6)",
+            opacity: "0",
+          },
+        },
       },
       animation: {
         "card-deal": "card-deal 320ms ease-out both",
         "chip-pop": "chip-pop 280ms ease-out both",
         "winner-glow": "winner-glow 1400ms ease-in-out 2",
         "wallet-bump": "wallet-bump 380ms ease-out",
+        "action-pill": "action-pill 1800ms ease-in-out forwards",
+        "chip-fly": "chip-fly 900ms ease-out forwards",
       },
     },
   },

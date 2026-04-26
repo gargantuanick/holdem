@@ -1,4 +1,5 @@
 import type {
+  ActionType,
   Card,
   HandFinishedPayload,
   PlayerAction,
@@ -44,6 +45,8 @@ export interface TableSeat {
   ready: boolean;
   /** Mirror of HandSeatState.canStillRaise; default true outside a hand. */
   canStillRaise: boolean;
+  /** Last action this seat took in the current hand. Drives the UI pill. */
+  lastAction: { type: ActionType; amount?: number; at: number } | null;
 }
 
 export interface TableEvents {
@@ -92,6 +95,7 @@ export class Table {
       pendingLeave: false,
       ready: false,
       canStillRaise: true,
+      lastAction: null,
     }));
   }
 
@@ -178,6 +182,7 @@ export class Table {
       s.isAllIn = false;
       s.pendingLeave = false;
       s.canStillRaise = true;
+      s.lastAction = null;
     }
     this.events.onStateChange(this);
   }
@@ -200,6 +205,7 @@ export class Table {
     seat.isConnected = true;
     seat.ready = false;
     seat.canStillRaise = true;
+    seat.lastAction = null;
     this.events.onStateChange(this);
     return stack;
   }
@@ -304,6 +310,7 @@ export class Table {
       s.hasFolded = false;
       s.isAllIn = false;
       s.canStillRaise = true;
+      s.lastAction = null;
     }
 
     this.engine = new HandEngine(
@@ -334,7 +341,22 @@ export class Table {
     if (this.engine.toActSeatIndex !== seat.seatIndex) {
       throw new Error("not your turn");
     }
+    const streetBeforeAction = this.engine.street;
     this.engine.applyAction(seat.seatIndex, action);
+    // Stamp lastAction *after* the engine commits so we know the action was
+    // legal. Amount reflects what they actually committed this street, which
+    // is the meaningful number for the UI ("Called 50", "Bet 100").
+    seat.lastAction = {
+      type: action.type,
+      amount: action.amount,
+      at: Date.now(),
+    };
+    // If the street changed (action closed the round), wipe everyone's
+    // lastAction — the new street starts fresh.
+    if (this.engine.street !== streetBeforeAction) {
+      for (const s of this.seats) s.lastAction = null;
+      seat.lastAction = null;
+    }
     this.syncFromEngine();
 
     if (this.engine.phase === "complete") {
@@ -377,7 +399,10 @@ export class Table {
     }
     // Auto-sit-out the player who timed out so they don't keep timing out.
     const ts = this.seats[seatIndex];
-    if (ts) ts.sittingOut = true;
+    if (ts) {
+      ts.sittingOut = true;
+      ts.lastAction = { type: "fold", at: Date.now() };
+    }
     this.syncFromEngine();
     if (this.engine.phase === "complete") {
       this.finishHand();
@@ -557,6 +582,7 @@ export class Table {
         isConnected: s.isConnected,
         ready: s.ready,
         canStillRaise: s.canStillRaise,
+        lastAction: s.lastAction,
         holeCards: showHole ? s.holeCards : null,
         hasCards: s.inCurrentHand && !s.hasFolded && s.holeCards !== null,
       };

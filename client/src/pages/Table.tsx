@@ -36,6 +36,21 @@ export function TablePage() {
     getSocket().emit("table:requestState", { tableId });
   }, [tableId]);
 
+  // If the server kicks me from this table (admin clear, future kick), the
+  // table:evicted event tells the client to navigate back to the lobby
+  // rather than leaving them stuck on an empty table view.
+  useEffect(() => {
+    const sock = getSocket();
+    const onEvicted = (payload: { tableId: string; reason: string }) => {
+      if (payload.tableId !== tableId) return;
+      navigate("/lobby", { replace: true });
+    };
+    sock.on("table:evicted", onEvicted);
+    return () => {
+      sock.off("table:evicted", onEvicted);
+    };
+  }, [tableId, navigate]);
+
   // If no state arrives, bounce back to lobby — but only after the socket
   // has connected (otherwise we'd boot players on slow networks before
   // their socket has even handshaken). 10s after connection is generous

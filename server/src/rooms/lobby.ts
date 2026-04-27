@@ -228,6 +228,12 @@ export class Lobby {
   async adminForceClear(tableId: string): Promise<number[]> {
     const table = this.tables.get(tableId);
     if (!table) throw new Error("table not found");
+    const before = table.seats
+      .filter((s) => s.playerId !== null)
+      .map((s) => `seat${s.seatIndex}:p${s.playerId}(${s.username},stack=${s.stack},conn=${s.isConnected})`);
+    console.log(
+      `[adminForceClear] tableId=${tableId} occupiedBefore=${before.length} seats=[${before.join(" ")}]`,
+    );
     table.abortHand();
     // Pass 1 — synchronous seat eviction.
     const refunds: Array<{ playerId: number; stack: number }> = [];

@@ -423,7 +423,12 @@ export function registerSocketHandlers(
             reason: "Table cleared by admin",
           });
         }
-        cb({ ok: true, cleared: cleared.length });
+        const tableAfter = lobby.getTable(tableId);
+        const occupiedAfter = tableAfter ? tableAfter.occupiedSeats().length : 0;
+        console.log(
+          `[admin:clearTable] tableId=${tableId} by=${sock.data.username} cleared=${cleared.length} occupiedAfter=${occupiedAfter} clearedIds=[${cleared.join(",")}]`,
+        );
+        cb({ ok: true, cleared: cleared.length, occupiedAfter });
       } catch (err) {
         cb({ ok: false, error: errorMessage(err) });
       }

@@ -153,7 +153,11 @@ export interface ClientToServerEvents {
   ) => void;
   "admin:clearTable": (
     args: { tableId: string },
-    cb: (res: { ok: true; cleared: number } | { ok: false; error: string }) => void,
+    cb: (
+      res:
+        | { ok: true; cleared: number; occupiedAfter: number }
+        | { ok: false; error: string },
+    ) => void,
   ) => void;
   "table:action": (args: { tableId: string; action: PlayerAction }) => void;
   "table:chat": (args: { tableId: string; message: string }) => void;

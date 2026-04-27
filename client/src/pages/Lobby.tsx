@@ -15,6 +15,10 @@ export function LobbyPage() {
   const [joining, setJoining] = useState<LobbyTableSummary | null>(null);
   const [refillBusy, setRefillBusy] = useState(false);
   const [refillMsg, setRefillMsg] = useState<string | null>(null);
+  const [clearFeedback, setClearFeedback] = useState<{
+    tone: "success" | "warn" | "error";
+    msg: string;
+  } | null>(null);
   const navigate = useNavigate();
 
   const refresh = useCallback(() => {
@@ -24,20 +28,46 @@ export function LobbyPage() {
   const isAdmin = profile?.username === "nk";
 
   const clearTable = (tableId: string) => {
-    if (!confirm("Clear all seats at this table?")) return;
+    const target = tables.find((t) => t.id === tableId);
+    if (!confirm(`Clear all seats at ${target?.name ?? "this table"}?`)) return;
     getSocket().emit("admin:clearTable", { tableId }, (res) => {
-      if (res.ok) {
-        refresh();
-        if (res.cleared === 0) {
-          alert(
-            "Server reported 0 seats cleared. The deploy may not be live yet — wait a minute and try again.",
-          );
-        }
+      if (!res.ok) {
+        setClearFeedback({ tone: "error", msg: `Clear failed: ${res.error}` });
+        return;
+      }
+      // Optimistic local update so the UI reacts immediately, then re-poll.
+      setTables((prev) =>
+        prev.map((t) =>
+          t.id === tableId ? { ...t, occupiedSeats: res.occupiedAfter } : t,
+        ),
+      );
+      refresh();
+      const tableLabel = target?.name ?? "table";
+      if (res.cleared === 0 && res.occupiedAfter === 0) {
+        setClearFeedback({
+          tone: "warn",
+          msg: `${tableLabel} was already empty (server cleared 0).`,
+        });
+      } else if (res.occupiedAfter > 0) {
+        setClearFeedback({
+          tone: "error",
+          msg: `Cleared ${res.cleared} but server still reports ${res.occupiedAfter} seated at ${tableLabel}. Server may be running stale code — redeploy Railway.`,
+        });
       } else {
-        alert(`Clear failed: ${res.error}`);
+        const seatWord = res.cleared === 1 ? "seat" : "seats";
+        setClearFeedback({
+          tone: "success",
+          msg: `Cleared ${res.cleared} ${seatWord} from ${tableLabel}.`,
+        });
       }
     });
   };
+
+  useEffect(() => {
+    if (!clearFeedback) return;
+    const id = setTimeout(() => setClearFeedback(null), 5000);
+    return () => clearTimeout(id);
+  }, [clearFeedback]);
 
   useEffect(() => {
     refresh();
@@ -94,6 +124,27 @@ export function LobbyPage() {
       </header>
 
       <main className="px-4 py-4 space-y-4 pb-24">
+        {clearFeedback && (
+          <div
+            role="status"
+            className={`rounded-lg px-3 py-2 text-sm border flex items-start justify-between gap-2 ${
+              clearFeedback.tone === "success"
+                ? "bg-emerald-500/15 border-emerald-400/40 text-emerald-100"
+                : clearFeedback.tone === "warn"
+                  ? "bg-chip-gold/10 border-chip-gold/40 text-chip-gold"
+                  : "bg-red-500/15 border-red-400/40 text-red-100"
+            }`}
+          >
+            <span>{clearFeedback.msg}</span>
+            <button
+              onClick={() => setClearFeedback(null)}
+              className="text-xs opacity-70 hover:opacity-100"
+              aria-label="dismiss"
+            >
+              ✕
+            </button>
+          </div>
+        )}
         <section>
           <div className="flex items-center justify-between mb-2">
             <div>

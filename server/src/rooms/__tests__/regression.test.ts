@@ -10,7 +10,7 @@ const noopEvents = {
 const cfg = {
   id: "t1",
   name: "Test",
-  maxSeats: 6,
+  maxSeats: 5,
   smallBlind: 5,
   bigBlind: 10,
   minBuyIn: 100,
@@ -22,7 +22,7 @@ describe("dead-button rotation when dealer busts", () => {
     const t = new Table(cfg, noopEvents);
     t.sitDown({ playerId: 1, username: "a", buyIn: 200, seatIndex: 0 });
     t.sitDown({ playerId: 2, username: "b", buyIn: 200, seatIndex: 2 });
-    t.sitDown({ playerId: 3, username: "c", buyIn: 200, seatIndex: 5 });
+    t.sitDown({ playerId: 3, username: "c", buyIn: 200, seatIndex: 4 });
     t.setReady(1, true);
     t.setReady(2, true);
     t.setReady(3, true);
@@ -35,21 +35,21 @@ describe("dead-button rotation when dealer busts", () => {
     // ignores stack==0 anyway. Instead, abort and start fresh.
     t.abortHand();
     t.seats[2]!.stack = 0; // still busted
-    // start the next hand; eligible = [0, 5]
+    // start the next hand; eligible = [0, 4]
     t.startHand();
     // Expected: dealer rotates from prior position (2) to next clockwise
-    // eligible, which is seat 5. Pre-fix it incorrectly reset to seat 0.
-    expect(t.dealerSeatIndex).toBe(5);
+    // eligible, which is seat 4. Pre-fix it incorrectly reset to seat 0.
+    expect(t.dealerSeatIndex).toBe(4);
   });
 
   it("wraps to first eligible when previous dealer was the highest seat", () => {
     const t = new Table(cfg, noopEvents);
     t.sitDown({ playerId: 1, username: "a", buyIn: 200, seatIndex: 0 });
-    t.sitDown({ playerId: 2, username: "b", buyIn: 200, seatIndex: 5 });
+    t.sitDown({ playerId: 2, username: "b", buyIn: 200, seatIndex: 4 });
     t.setReady(1, true);
     t.setReady(2, true);
     t.startHand();
-    t.dealerSeatIndex = 5;
+    t.dealerSeatIndex = 4;
     t.abortHand();
     t.startHand();
     expect(t.dealerSeatIndex).toBe(0);

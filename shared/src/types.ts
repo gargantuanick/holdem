@@ -78,7 +78,7 @@ export interface HandHistoryEntry {
 export interface TableConfig {
   id: string;
   name: string;
-  maxSeats: number; // 2-9
+  maxSeats: number; // 2-5
   smallBlind: number;
   bigBlind: number;
   minBuyIn: number;

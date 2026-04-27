@@ -10,7 +10,7 @@ export function CreateTableModal({
   onCreated: (tableId: string) => void;
 }) {
   const [name, setName] = useState("My Table");
-  const [maxSeats, setMaxSeats] = useState(6);
+  const [maxSeats, setMaxSeats] = useState(5);
   const [smallBlind, setSmallBlind] = useState(5);
   const [bigBlind, setBigBlind] = useState(10);
   const [minBuyIn, setMinBuyIn] = useState(200);
@@ -51,7 +51,7 @@ export function CreateTableModal({
           <input
             type="range"
             min={2}
-            max={9}
+            max={5}
             value={maxSeats}
             onChange={(e) => setMaxSeats(Number(e.target.value))}
             className="chip-slider w-full"

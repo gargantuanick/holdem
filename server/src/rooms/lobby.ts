@@ -43,7 +43,7 @@ export class Lobby {
   private seedDefaultTables() {
     this.createTable({
       name: "Beginner Stakes",
-      maxSeats: 6,
+      maxSeats: 5,
       smallBlind: 5,
       bigBlind: 10,
       minBuyIn: 200, // 20× BB
@@ -51,7 +51,7 @@ export class Lobby {
     });
     this.createTable({
       name: "Mid Stakes",
-      maxSeats: 9,
+      maxSeats: 5,
       smallBlind: 25,
       bigBlind: 50,
       minBuyIn: 1000,
@@ -88,8 +88,8 @@ export class Lobby {
     if (args.name.length > 40) {
       throw new Error("name too long (max 40 chars)");
     }
-    if (args.maxSeats < 2 || args.maxSeats > 9) {
-      throw new Error("maxSeats must be 2..9");
+    if (args.maxSeats < 2 || args.maxSeats > 5) {
+      throw new Error("maxSeats must be 2..5");
     }
     if (args.bigBlind <= 0 || args.smallBlind <= 0) {
       throw new Error("blinds must be > 0");

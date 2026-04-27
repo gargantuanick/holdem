@@ -100,7 +100,7 @@ export function BettingControls({ state, tableId, localPlayerId }: Props) {
   };
 
   return (
-    <div className="fixed bottom-0 inset-x-0 safe-bottom bg-felt-900/95 backdrop-blur border-t border-white/10 px-2 pt-2 pb-2 z-20">
+    <div className="shrink-0 safe-bottom bg-felt-900/95 backdrop-blur border-t border-white/10 px-2 pt-2 pb-2">
       {raiseUiOpen && isMyTurn && (
         <div className="mb-2 rounded-xl bg-felt-800 border border-white/15 p-2 space-y-2">
           <div className="flex items-center justify-between text-xs text-white/70">

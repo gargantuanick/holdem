@@ -27,7 +27,7 @@ export function TableCanvas({
   const arranged = arrangeForBottomLocal(seats, localIdx);
 
   return (
-    <div className="relative w-full aspect-[3/4] max-h-[68dvh] mx-auto">
+    <div className="relative w-full max-w-md aspect-[3/4] max-h-full mx-auto">
       {/* Felt */}
       <div className="absolute inset-2 rounded-[40%/30%] bg-gradient-to-b from-felt-700 to-felt-900 border-4 border-felt-500/50 shadow-inner" />
       <div className="absolute inset-4 rounded-[40%/30%] border border-white/10" />
@@ -122,9 +122,10 @@ function arrangeForBottomLocal(
   for (let k = 0; k < N; k++) {
     ordered.push(seats[(localIdx + k) % N]!);
   }
-  // Local player at bottom-center.
-  result.push({ seat: ordered[0]!, position: { x: 0.5, y: 0.92 } });
-  // Other seats along an upper arc from left (0.05) to right (0.95).
+  // Local player anchored toward the bottom — y=0.85 leaves room for the
+  // chunky xl hero cards without spilling past the canvas edge.
+  result.push({ seat: ordered[0]!, position: { x: 0.5, y: 0.85 } });
+  // Other seats along an upper arc.
   const others = ordered.slice(1);
   for (let i = 0; i < others.length; i++) {
     const t = others.length === 1 ? 0.5 : i / (others.length - 1);
@@ -134,10 +135,12 @@ function arrangeForBottomLocal(
 }
 
 function pointOnArc(t: number): { x: number; y: number } {
-  // Arc from left to right across the top of the canvas.
-  // Use a parabolic dip: y peaks (low) at the top center.
-  const x = 0.05 + t * 0.9;
-  // y in [0.1, 0.3]; peak at t=0.5
+  // Arc across the top of the canvas. x range tightened to [0.18, 0.82] so
+  // edge seats stay fully on-screen at 320–375px viewports — at the prior
+  // [0.05, 0.95] range the leftmost/rightmost seat boxes overflowed off
+  // the table on mobile.
+  const x = 0.18 + t * 0.64;
+  // y in [0.14, 0.32]; peak (lowest y) at t=0.5
   const y = 0.32 - Math.sin(t * Math.PI) * 0.18;
   return { x, y };
 }

@@ -127,8 +127,8 @@ export function TablePage() {
     !!state && !!mySeat && !mySeat.sittingOut && !mySeat.hasCards;
 
   return (
-    <div className="min-h-full w-full bg-felt-900 text-white relative pb-[120px] safe-top">
-      <header className="px-3 py-2 flex items-center gap-2 border-b border-white/10 bg-felt-900/95 backdrop-blur sticky top-0 z-10">
+    <div className="h-dvh w-full bg-felt-900 text-white safe-top flex flex-col overflow-hidden">
+      <header className="shrink-0 px-3 py-2 flex items-center gap-2 border-b border-white/10 bg-felt-900/95 backdrop-blur">
         <button
           onClick={leave}
           className="text-xs px-2 py-1 rounded-md bg-white/8 hover:bg-white/12"
@@ -180,98 +180,100 @@ export function TablePage() {
         </button>
       </header>
 
-      <div className="relative">
-        {state ? (
-          <TableCanvas
-            state={state}
-            localPlayerId={localPlayerId}
-            lastHandWinners={lastHand?.winners ?? []}
-            onProfileClick={(u) => setProfileOf(u)}
-          />
-        ) : (
-          <div className="text-white/60 text-center py-12">Loading table…</div>
-        )}
-        {!connected && (
-          <div className="absolute top-2 right-2 left-2 sm:left-auto sm:max-w-xs bg-amber-600/90 text-white text-sm px-3 py-2 rounded-md">
-            Reconnecting…
-          </div>
-        )}
-        {connected && errorBanner && (
-          <div className="absolute top-2 right-2 left-2 sm:left-auto sm:max-w-xs bg-red-700/90 text-white text-sm px-3 py-2 rounded-md">
-            {errorBanner}
-          </div>
-        )}
-        {lastHand && (
-          <div className="absolute inset-x-2 top-12 mx-auto max-w-md bg-black/70 border border-chip-gold/40 rounded-lg p-2 text-center text-sm">
-            <div className="text-chip-gold font-semibold mb-0.5">
-              Hand #{lastHand.handNumber} · pot {formatChips(lastHand.potTotal)}
+      <main className="flex-1 min-h-0 flex flex-col">
+        <div className="flex-1 min-h-0 relative flex items-center justify-center px-2 py-1">
+          {state ? (
+            <TableCanvas
+              state={state}
+              localPlayerId={localPlayerId}
+              lastHandWinners={lastHand?.winners ?? []}
+              onProfileClick={(u) => setProfileOf(u)}
+            />
+          ) : (
+            <div className="text-white/60 text-center">Loading table…</div>
+          )}
+          {!connected && (
+            <div className="absolute top-2 right-2 left-2 sm:left-auto sm:max-w-xs bg-amber-600/90 text-white text-sm px-3 py-2 rounded-md">
+              Reconnecting…
             </div>
-            {lastHand.winners.map((w, i) => (
-              <div key={i}>
-                <b>{w.username}</b> wins {formatChips(w.amount)}
-                {w.handDescription && (
-                  <span className="text-white/60"> · {w.handDescription}</span>
+          )}
+          {connected && errorBanner && (
+            <div className="absolute top-2 right-2 left-2 sm:left-auto sm:max-w-xs bg-red-700/90 text-white text-sm px-3 py-2 rounded-md">
+              {errorBanner}
+            </div>
+          )}
+          {lastHand && (
+            <div className="absolute inset-x-2 top-2 mx-auto max-w-md bg-black/70 border border-chip-gold/40 rounded-lg p-2 text-center text-sm">
+              <div className="text-chip-gold font-semibold mb-0.5">
+                Hand #{lastHand.handNumber} · pot {formatChips(lastHand.potTotal)}
+              </div>
+              {lastHand.winners.map((w, i) => (
+                <div key={i}>
+                  <b>{w.username}</b> wins {formatChips(w.amount)}
+                  {w.handDescription && (
+                    <span className="text-white/60"> · {w.handDescription}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {mySeat?.sittingOut && (
+          <div className="shrink-0 mx-3 mt-1 rounded-lg border border-yellow-500/60 bg-yellow-500/15 px-3 py-1.5 flex items-center justify-between gap-3">
+            <div className="text-xs">
+              <div className="font-semibold text-yellow-200">
+                You're sitting out
+              </div>
+              <div className="text-[10px] text-yellow-100/80">
+                You won't be dealt cards until you sit back in.
+              </div>
+            </div>
+            <button
+              onClick={() => sitOut(false)}
+              className="shrink-0 px-3 py-1 rounded-md bg-yellow-400 text-black text-xs font-semibold active:scale-[0.98]"
+            >
+              Sit in
+            </button>
+          </div>
+        )}
+
+        <div className="shrink-0 px-3 py-1.5 flex items-center justify-between text-xs">
+          {mySeat && (
+            <>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => sitOut(!mySeat.sittingOut)}
+                  className="px-2 py-1 rounded-md bg-white/8 hover:bg-white/12"
+                >
+                  {mySeat.sittingOut ? "Sit in" : "Sit out"}
+                </button>
+                {state && mySeat.stack < state.config.bigBlind && state.toActSeat !== mySeat.seatIndex && (
+                  <button
+                    onClick={() => setRebuyOpen(true)}
+                    className="px-2 py-1 rounded-md bg-chip-gold/80 hover:bg-chip-gold text-black"
+                  >
+                    Rebuy
+                  </button>
                 )}
               </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {mySeat?.sittingOut && (
-        <div className="mx-3 mt-2 rounded-lg border border-yellow-500/60 bg-yellow-500/15 px-3 py-2 flex items-center justify-between gap-3">
-          <div className="text-sm">
-            <div className="font-semibold text-yellow-200">
-              You're sitting out
-            </div>
-            <div className="text-xs text-yellow-100/80">
-              You won't be dealt cards until you sit back in.
-            </div>
-          </div>
-          <button
-            onClick={() => sitOut(false)}
-            className="shrink-0 px-3 py-1.5 rounded-md bg-yellow-400 text-black text-sm font-semibold active:scale-[0.98]"
-          >
-            Sit in
-          </button>
+              <div className="text-white/50 font-mono">
+                stack {formatChips(mySeat.stack)}
+              </div>
+            </>
+          )}
         </div>
-      )}
-
-      <div className="px-3 py-2 flex items-center justify-between text-xs">
-        {mySeat && (
-          <>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => sitOut(!mySeat.sittingOut)}
-                className="px-2 py-1 rounded-md bg-white/8 hover:bg-white/12"
-              >
-                {mySeat.sittingOut ? "Sit in" : "Sit out"}
-              </button>
-              {state && mySeat.stack < state.config.bigBlind && state.toActSeat !== mySeat.seatIndex && (
-                <button
-                  onClick={() => setRebuyOpen(true)}
-                  className="px-2 py-1 rounded-md bg-chip-gold/80 hover:bg-chip-gold text-black"
-                >
-                  Rebuy
-                </button>
-              )}
-            </div>
-            <div className="text-white/50 font-mono">
-              stack {formatChips(mySeat.stack)}
-            </div>
-          </>
-        )}
-      </div>
+      </main>
 
       {showStartGate && mySeat && (
-        <div className="fixed bottom-0 inset-x-0 safe-bottom bg-felt-900/95 backdrop-blur border-t border-white/10 px-3 pt-3 pb-3 z-20">
-          <div className="rounded-xl bg-felt-800 border border-white/15 p-3">
-            <div className="flex items-center justify-between mb-2">
+        <div className="shrink-0 safe-bottom bg-felt-900/95 backdrop-blur border-t border-white/10 px-3 pt-2 pb-2">
+          <div className="rounded-xl bg-felt-800 border border-white/15 p-2">
+            <div className="flex items-center justify-between mb-1.5">
               <div>
-                <div className="font-semibold">
+                <div className="font-semibold text-sm">
                   {mySeat.ready ? "Waiting for opponents" : "Ready up to play"}
                 </div>
-                <div className="text-xs text-white/60">
+                <div className="text-[11px] text-white/60">
                   {readyCount} of {eligiblePlayers.length} ready
                   {eligiblePlayers.length < 2 && " · need 2+ players"}
                 </div>

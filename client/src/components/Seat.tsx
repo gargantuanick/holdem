@@ -24,7 +24,7 @@ export function Seat({
 }: Props) {
   if (seat.playerId === null) {
     return (
-      <div className="rounded-xl bg-white/5 border border-dashed border-white/15 px-3 py-2 text-xs text-white/40 text-center min-w-[110px]">
+      <div className="rounded-xl bg-white/5 border border-dashed border-white/15 px-3 py-2 text-xs text-white/40 text-center min-w-[88px] sm:min-w-[110px]">
         empty seat
       </div>
     );
@@ -33,8 +33,8 @@ export function Seat({
   const dimmedForOut = seat.sittingOut && !isLocal;
   return (
     <div
-      className={`relative rounded-xl border px-2 py-1.5 min-w-[110px] flex flex-col items-center
-        ${isLocal ? "bg-felt-700/80 border-chip-gold/50" : "bg-felt-800/80 border-white/15"}
+      className={`relative rounded-xl border px-2 py-1.5 flex flex-col items-center
+        ${isLocal ? "min-w-[120px] sm:min-w-[140px] bg-felt-700/80 border-chip-gold/50" : "min-w-[88px] sm:min-w-[110px] bg-felt-800/80 border-white/15"}
         ${isToAct ? "ring-2 ring-chip-gold animate-pulse" : ""}
         ${winnerHighlight ? "animate-winner-glow" : ""}
         ${seat.hasFolded ? "opacity-50" : ""}
@@ -60,14 +60,14 @@ export function Seat({
 
       <div
         className={`flex gap-1 mb-1 ${
-          isLocal ? "h-[4.25rem]" : "h-[3.25rem]"
+          isLocal ? "h-20 sm:h-28" : "h-[3.25rem]"
         }`}
       >
         {seat.hasCards ? (
           isLocal && seat.holeCards ? (
             <>
-              <PlayingCard card={seat.holeCards[0]} size="md" />
-              <PlayingCard card={seat.holeCards[1]} size="md" />
+              <PlayingCard card={seat.holeCards[0]} size="xl" />
+              <PlayingCard card={seat.holeCards[1]} size="xl" />
             </>
           ) : (
             <>

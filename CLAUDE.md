@@ -20,6 +20,12 @@ When finishing a meaningful change to source files:
 3. **Only if both pass**, commit and push.
 4. **Never** push if tests fail. **Never** `git add -A`. Stage only the
    files actually touched.
+5. If the change touches `server/` or `shared/`, **also deploy the
+   server to Railway manually** (see "Deploying the server" below).
+   `git push` alone is not enough for the server right now —
+   Railway's GitHub integration is broken (see notes there). Client-
+   only changes (only `client/` touched) auto-deploy via Netlify and
+   need no extra step.
 
 ## How to push
 
@@ -73,25 +79,77 @@ Three options, fastest to slowest:
 
 1. **Platform-level rollback.** Both Netlify and Railway keep deploy
    history. To stop the bleeding fast, re-promote the previous deploy
-   from their dashboard. Takes ~30s and doesn't touch git.
+   from their dashboard. Takes ~30s and doesn't touch git. Works for
+   the server even though auto-deploy is broken — the Railway
+   dashboard's "redeploy" on a prior deploy is independent of the
+   GitHub link.
 2. **Revert via the script.** Each successful push logs its own SHA
    and the revert command. Run that command, the script creates a
-   revert commit on `main`, auto-deploy follows.
+   revert commit on `main`. Netlify auto-deploys; for the server,
+   follow up with `cd server && railway up` to push the revert.
 3. **Revert via GitHub UI.** Open the commit on github.com → Revert
-   button → merge.
+   button → merge. Same caveat — server still needs `railway up`.
 
 Note: a code revert does NOT undo a SQL migration. Schema rollbacks
 need a down-migration file written and applied separately.
 
 ## Auto-deploy
 
-`main` is wired to:
-- **Netlify** (client) — builds `client/` on push, serves at
-  https://poker.gargantua.llc.
-- **Railway** (server) — builds `server/` on push, serves at
-  https://poker-api.gargantua.llc.
+- **Netlify** (client) — auto-deploys. Builds `client/` on every push
+  to `main`, serves at https://holdem-nk.netlify.app (and
+  https://poker.gargantua.llc if the custom domain is wired up). No
+  manual step needed.
+- **Railway** (server) — **NOT auto-deploying right now.** The
+  GitHub App connection on this repo is broken (the repo doesn't
+  show up in Railway's "Connect Repo" dropdown despite the App
+  having `All repositories` access). Until that's resolved, server
+  deploys are manual via the Railway CLI.
 
-So a push to `main` is the same event as "the change is live in prod."
+So a push to `main` is "live on Netlify in ~30s" but the server
+stays on whatever was last `railway up`'d.
+
+## Deploying the server
+
+Until Railway auto-deploy is restored, run this from a normal shell
+(not Cowork — the CLI needs interactive auth):
+
+```
+cd server
+railway up
+```
+
+First-time setup on a new machine:
+```
+npm i -g @railway/cli
+railway login          # opens browser
+railway link           # pick the holdem project + the server service
+```
+
+`railway up` packages the current working tree of `server/` (plus
+the `@holdem/shared` workspace it depends on), builds, and replaces
+the running deployment. The Railway dashboard shows a new deploy
+ID and the in-memory state is wiped — i.e., any seated players are
+evicted on restart.
+
+To verify the deploy landed: open Railway → Deployments → confirm a
+fresh timestamp on the active deploy. The Beginner Stakes table
+will show `0/6` after a server restart since seats are not
+persisted to Postgres.
+
+### When Railway's GitHub integration is fixed
+
+If/when the Connect Repo dropdown finally shows `gargantuanick/
+holdem`, reconnect it and remove the manual `railway up` step from
+the workflow above. Things tried so far that did NOT fix it:
+- Setting GitHub App "Repository access" to "All repositories"
+- Suspending and unsuspending the Railway GitHub App installation
+- Hard refresh of Railway's dashboard
+
+Things still worth trying:
+- Uninstall the Railway GitHub App entirely on github.com, then
+  reinstall fresh from Railway's "Connect Repo" flow
+- Disconnect/reconnect Railway's account-level GitHub integration
+  in Railway → Account Settings → Integrations
 
 ## What to commit
 

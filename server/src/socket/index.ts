@@ -341,23 +341,34 @@ export function registerSocketHandlers(
     });
 
     sock.on("table:action", ({ tableId, action }) => {
+      const tag = `[table:action] sock=${sock.id} pid=${sock.data.playerId} user=${sock.data.username} table=${tableId} action=${(action as { type?: unknown })?.type}`;
       if (!sock.data.playerId) {
+        console.warn(`${tag} REJECT not-authenticated`);
         sock.emit("error", "Not authenticated — please reload.");
         return;
       }
       if (!isValidAction(action)) {
+        console.warn(`${tag} REJECT invalid-payload`);
         sock.emit("error", "invalid action payload");
         return;
       }
       if (!takeActionToken(sock.id)) {
+        console.warn(`${tag} REJECT rate-limited`);
         sock.emit("error", "rate limited; slow down");
         return;
       }
       const table = lobby.getTable(tableId);
-      if (!table) return;
+      if (!table) {
+        console.warn(`${tag} REJECT table-not-found`);
+        return;
+      }
       try {
         table.applyAction(sock.data.playerId, action);
+        console.log(
+          `${tag} OK toAct=${table.engine?.toActSeatIndex ?? "null"} street=${table.engine?.street ?? "idle"} currentBet=${table.engine?.currentBet ?? 0}`,
+        );
       } catch (err) {
+        console.warn(`${tag} ENGINE-REJECT ${errorMessage(err)}`);
         sock.emit("error", errorMessage(err));
       }
     });

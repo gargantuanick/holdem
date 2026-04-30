@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import type { Card as CardT, PublicSeat, Winner } from "@holdem/shared";
 import { PlayingCard } from "./Card";
 import { ChipStack } from "./ChipStack";
@@ -89,9 +90,7 @@ export function Seat({
       >
         {seat.username}
       </button>
-      <div className="text-[11px] font-mono text-white/80">
-        {formatChips(seat.stack)}
-      </div>
+      <StackDisplay stack={seat.stack} prominent={isLocal} />
       {seat.betThisStreet > 0 && (
         <div className="absolute -bottom-3">
           <ChipStack amount={seat.betThisStreet} small />
@@ -141,6 +140,42 @@ function ActionPill({
     >
       {style!.label}
       {showAmount ? ` ${action.amount!.toLocaleString()}` : ""}
+    </div>
+  );
+}
+
+function StackDisplay({
+  stack,
+  prominent,
+}: {
+  stack: number;
+  prominent: boolean;
+}) {
+  const prev = useRef(stack);
+  const [delta, setDelta] = useState<"up" | "down" | null>(null);
+  useEffect(() => {
+    if (prev.current === stack) return;
+    setDelta(stack > prev.current ? "up" : "down");
+    prev.current = stack;
+    const t = setTimeout(() => setDelta(null), 700);
+    return () => clearTimeout(t);
+  }, [stack]);
+  const sizeCls = prominent ? "text-base sm:text-lg" : "text-sm";
+  const colorCls =
+    delta === "up"
+      ? "text-emerald-300"
+      : delta === "down"
+        ? "text-red-300"
+        : "text-chip-gold";
+  return (
+    <div
+      key={delta ? `${stack}-${delta}` : "static"}
+      className={`flex items-center gap-1 font-mono font-bold ${sizeCls} ${colorCls} ${
+        delta ? "animate-wallet-bump" : ""
+      }`}
+    >
+      <span className="w-2 h-2 rounded-full bg-chip-gold shadow-[0_0_4px_rgba(212,169,58,0.7)]" />
+      {formatChips(stack)}
     </div>
   );
 }

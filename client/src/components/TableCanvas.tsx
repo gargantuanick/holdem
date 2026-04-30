@@ -34,7 +34,7 @@ export function TableCanvas({
   const arranged = arrangeForBottomLocal(seats, localIdx);
 
   return (
-    <div className="relative w-full max-w-md aspect-[3/4] max-h-full mx-auto">
+    <div className="relative w-full max-w-lg aspect-[3/4] max-h-full mx-auto">
       {/* Felt */}
       <div className="absolute inset-2 rounded-[40%/30%] bg-gradient-to-b from-felt-700 to-felt-900 border-4 border-felt-500/50 shadow-inner" />
       <div className="absolute inset-4 rounded-[40%/30%] border border-white/10" />

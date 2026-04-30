@@ -45,7 +45,7 @@ export function PlayingCard({
       </div>
     );
   }
-  const rank = card[0];
+  const rank = card[0] === "T" ? "10" : card[0];
   const suit = card[1] as keyof typeof SUIT_GLYPH;
   return (
     <div

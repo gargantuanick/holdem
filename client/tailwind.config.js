@@ -66,7 +66,7 @@ export default {
         "chip-pop": "chip-pop 280ms ease-out both",
         "winner-glow": "winner-glow 1400ms ease-in-out 2",
         "wallet-bump": "wallet-bump 380ms ease-out",
-        "action-pill": "action-pill 1800ms ease-in-out forwards",
+        "action-pill": "action-pill 2400ms ease-in-out forwards",
         "chip-fly": "chip-fly 900ms ease-out forwards",
       },
     },

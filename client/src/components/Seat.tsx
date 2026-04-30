@@ -96,6 +96,13 @@ export function Seat({
           <ChipStack amount={seat.betThisStreet} small />
         </div>
       )}
+      {seat.lastAction &&
+        (seat.lastAction.type === "bet" ||
+          seat.lastAction.type === "call" ||
+          seat.lastAction.type === "raise" ||
+          seat.lastAction.type === "allin") && (
+          <FlyingChip key={`fly-${seat.lastAction.at}`} />
+        )}
       {seat.isAllIn && (
         <div className="absolute top-0 right-1 text-[9px] uppercase font-bold text-red-300">
           all-in
@@ -112,12 +119,30 @@ export function Seat({
 }
 
 const PILL_STYLES: Record<string, { label: string; cls: string }> = {
-  fold: { label: "Fold", cls: "bg-red-700/90 text-white" },
-  check: { label: "Check", cls: "bg-blue-700/90 text-white" },
-  call: { label: "Call", cls: "bg-blue-700/90 text-white" },
-  bet: { label: "Bet", cls: "bg-emerald-700/90 text-white" },
-  raise: { label: "Raise", cls: "bg-emerald-700/90 text-white" },
-  allin: { label: "All-in", cls: "bg-yellow-500 text-black" },
+  fold: {
+    label: "Fold",
+    cls: "bg-red-600 text-white ring-2 ring-red-300/60 shadow-[0_0_14px_rgba(239,68,68,0.7)]",
+  },
+  check: {
+    label: "Check",
+    cls: "bg-sky-500 text-white ring-2 ring-sky-200/60 shadow-[0_0_14px_rgba(56,189,248,0.7)]",
+  },
+  call: {
+    label: "Call",
+    cls: "bg-blue-600 text-white ring-2 ring-blue-200/60 shadow-[0_0_14px_rgba(59,130,246,0.7)]",
+  },
+  bet: {
+    label: "Bet",
+    cls: "bg-emerald-500 text-white ring-2 ring-emerald-200/60 shadow-[0_0_14px_rgba(16,185,129,0.8)]",
+  },
+  raise: {
+    label: "Raise",
+    cls: "bg-emerald-500 text-white ring-2 ring-emerald-200/60 shadow-[0_0_14px_rgba(16,185,129,0.8)]",
+  },
+  allin: {
+    label: "All-In",
+    cls: "bg-yellow-400 text-black ring-2 ring-yellow-100 shadow-[0_0_18px_rgba(234,179,8,0.9)]",
+  },
 };
 
 function ActionPill({
@@ -133,14 +158,21 @@ function ActionPill({
       action.type === "allin");
   return (
     <div
-      // Re-key on `at` so a new action restarts the animation even if the
-      // component is reused.
       key={action.at}
-      className={`absolute -top-3 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider shadow whitespace-nowrap pointer-events-none animate-action-pill ${style!.cls}`}
+      className={`absolute -top-5 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-xs sm:text-sm font-extrabold uppercase tracking-wider whitespace-nowrap pointer-events-none z-10 animate-action-pill ${style!.cls}`}
     >
       {style!.label}
       {showAmount ? ` ${action.amount!.toLocaleString()}` : ""}
     </div>
+  );
+}
+
+function FlyingChip() {
+  return (
+    <div
+      className="absolute left-1/2 -translate-x-1/2 -bottom-3 w-3 h-3 rounded-full bg-chip-gold shadow-[0_0_8px_rgba(212,169,58,0.9)] pointer-events-none animate-chip-fly"
+      aria-hidden
+    />
   );
 }
 

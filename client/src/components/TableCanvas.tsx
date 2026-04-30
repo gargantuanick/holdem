@@ -1,4 +1,9 @@
-import type { PublicTableState, Winner } from "@holdem/shared";
+import type {
+  Card as CardT,
+  HandFinishedPayload,
+  PublicTableState,
+  Winner,
+} from "@holdem/shared";
 import { PlayingCard } from "./Card";
 import { Seat } from "./Seat";
 import { ChipStack } from "./ChipStack";
@@ -7,6 +12,7 @@ interface Props {
   state: PublicTableState;
   localPlayerId: number | null;
   lastHandWinners: Winner[];
+  shownHands: HandFinishedPayload["shownHands"];
   onProfileClick?: (username: string) => void;
 }
 
@@ -18,6 +24,7 @@ export function TableCanvas({
   state,
   localPlayerId,
   lastHandWinners,
+  shownHands,
   onProfileClick,
 }: Props) {
   // Order seats so the local player is at the bottom, then opponents going
@@ -67,6 +74,8 @@ export function TableCanvas({
         const isDealer = state.dealerSeat === seat.seatIndex;
         const winner =
           lastHandWinners.find((w) => w.seatIndex === seat.seatIndex) ?? null;
+        const revealed: [CardT, CardT] | null =
+          shownHands.find((sh) => sh.seatIndex === seat.seatIndex)?.cards ?? null;
         return (
           <div
             key={seat.seatIndex}
@@ -80,6 +89,7 @@ export function TableCanvas({
               isDealer={isDealer}
               actionDeadline={isToAct ? state.actionDeadline : null}
               winner={winner}
+              revealedCards={revealed}
               onClickName={
                 seat.username
                   ? () => onProfileClick?.(seat.username!)

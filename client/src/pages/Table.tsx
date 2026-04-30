@@ -187,6 +187,11 @@ export function TablePage() {
               state={state}
               localPlayerId={localPlayerId}
               lastHandWinners={lastHand?.winners ?? []}
+              shownHands={
+                lastHand && lastHand.handNumber === state.handNumber
+                  ? lastHand.shownHands
+                  : []
+              }
               onProfileClick={(u) => setProfileOf(u)}
             />
           ) : (

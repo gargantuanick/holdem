@@ -1,4 +1,4 @@
-import type { PublicSeat, Winner } from "@holdem/shared";
+import type { Card as CardT, PublicSeat, Winner } from "@holdem/shared";
 import { PlayingCard } from "./Card";
 import { ChipStack } from "./ChipStack";
 import { formatChips } from "../lib/format";
@@ -10,6 +10,7 @@ interface Props {
   isDealer: boolean;
   actionDeadline: number | null;
   winner: Winner | null;
+  revealedCards: [CardT, CardT] | null;
   onClickName?: () => void;
 }
 
@@ -20,6 +21,7 @@ export function Seat({
   isDealer,
   actionDeadline,
   winner,
+  revealedCards,
   onClickName,
 }: Props) {
   if (seat.playerId === null) {
@@ -63,18 +65,21 @@ export function Seat({
           isLocal ? "h-20 sm:h-28" : "h-[3.25rem]"
         }`}
       >
-        {seat.hasCards ? (
-          isLocal && seat.holeCards ? (
-            <>
-              <PlayingCard card={seat.holeCards[0]} size="xl" />
-              <PlayingCard card={seat.holeCards[1]} size="xl" />
-            </>
-          ) : (
-            <>
-              <PlayingCard faceDown size="sm" />
-              <PlayingCard faceDown size="sm" />
-            </>
-          )
+        {isLocal && seat.holeCards ? (
+          <>
+            <PlayingCard card={seat.holeCards[0]} size="xl" />
+            <PlayingCard card={seat.holeCards[1]} size="xl" />
+          </>
+        ) : revealedCards ? (
+          <>
+            <PlayingCard card={revealedCards[0]} size="sm" />
+            <PlayingCard card={revealedCards[1]} size="sm" />
+          </>
+        ) : seat.hasCards ? (
+          <>
+            <PlayingCard faceDown size="sm" />
+            <PlayingCard faceDown size="sm" />
+          </>
         ) : null}
       </div>
       <button

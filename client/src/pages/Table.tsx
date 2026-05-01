@@ -8,6 +8,7 @@ import { BettingControls } from "../components/BettingControls";
 import { ChatPanel } from "../components/ChatPanel";
 import { HandHistoryPanel } from "../components/HandHistoryPanel";
 import { ProfileModal } from "../components/ProfileModal";
+import { ShowdownOverlay } from "../components/ShowdownOverlay";
 import { WalletBadge } from "../components/WalletBadge";
 import { formatChips } from "../lib/format";
 
@@ -207,20 +208,8 @@ export function TablePage() {
               {errorBanner}
             </div>
           )}
-          {lastHand && (
-            <div className="absolute inset-x-2 top-2 mx-auto max-w-md bg-black/70 border border-chip-gold/40 rounded-lg p-2 text-center text-sm">
-              <div className="text-chip-gold font-semibold mb-0.5">
-                Hand #{lastHand.handNumber} · pot {formatChips(lastHand.potTotal)}
-              </div>
-              {lastHand.winners.map((w, i) => (
-                <div key={i}>
-                  <b>{w.username}</b> wins {formatChips(w.amount)}
-                  {w.handDescription && (
-                    <span className="text-white/60"> · {w.handDescription}</span>
-                  )}
-                </div>
-              ))}
-            </div>
+          {lastHand && state && lastHand.handNumber === state.handNumber && (
+            <ShowdownOverlay payload={lastHand} />
           )}
         </div>
 

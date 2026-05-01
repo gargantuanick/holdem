@@ -60,6 +60,11 @@ export default {
             opacity: "0",
           },
         },
+        "showdown-in": {
+          "0%": { transform: "translateY(-12px) scale(0.92)", opacity: "0" },
+          "60%": { transform: "translateY(0) scale(1.02)", opacity: "1" },
+          "100%": { transform: "translateY(0) scale(1)", opacity: "1" },
+        },
       },
       animation: {
         "card-deal": "card-deal 320ms ease-out both",
@@ -68,6 +73,7 @@ export default {
         "wallet-bump": "wallet-bump 380ms ease-out",
         "action-pill": "action-pill 2400ms ease-in-out forwards",
         "chip-fly": "chip-fly 900ms ease-out forwards",
+        "showdown-in": "showdown-in 480ms cubic-bezier(0.34, 1.56, 0.64, 1) both",
       },
     },
   },

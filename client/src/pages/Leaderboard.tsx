@@ -17,16 +17,30 @@ export function LeaderboardPage() {
   const [tab, setTab] = useState<SortKey>("wallet");
   const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
   const [profileOf, setProfileOf] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
+    setError(null);
     fetch(`${serverUrl()}/api/leaderboard?sort=${tab}`)
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error("leaderboard unavailable");
+        return r.json();
+      })
       .then((j: { entries: LeaderboardEntry[] }) => {
-        if (!cancelled) setEntries(j.entries);
+        if (!cancelled) {
+          setEntries(j.entries);
+          setLoading(false);
+        }
       })
       .catch(() => {
-        // ignore
+        if (!cancelled) {
+          setEntries([]);
+          setError("Leaderboard is unavailable right now.");
+          setLoading(false);
+        }
       });
     return () => {
       cancelled = true;
@@ -85,7 +99,15 @@ export function LeaderboardPage() {
             </button>
           </li>
         ))}
-        {entries.length === 0 && (
+        {loading && (
+          <li className="text-center text-white/50 py-12">
+            Loading leaderboard…
+          </li>
+        )}
+        {!loading && error && (
+          <li className="text-center text-red-300 py-12 px-4">{error}</li>
+        )}
+        {!loading && !error && entries.length === 0 && (
           <li className="text-center text-white/50 py-12">
             No entries yet.
           </li>

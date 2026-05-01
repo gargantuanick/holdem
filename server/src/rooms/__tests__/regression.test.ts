@@ -108,3 +108,60 @@ describe("first-hand lockup grief", () => {
     expect(t.seats[1]!.inCurrentHand).toBe(true);
   });
 });
+
+describe("sit-out / sit-in flow", () => {
+  it("ready players become eligible again when they sit back in", () => {
+    const t = new Table(cfg, noopEvents);
+    t.sitDown({ playerId: 1, username: "a", buyIn: 200 });
+    t.sitDown({ playerId: 2, username: "b", buyIn: 200 });
+    t.setReady(1, true);
+    t.setReady(2, true);
+
+    t.setSittingOut(2, true);
+    expect(t.canStartHand()).toBe(false);
+
+    t.setSittingOut(2, false);
+    expect(t.canStartHand()).toBe(true);
+  });
+});
+
+describe("show cards at showdown", () => {
+  it("includes opted-in non-folded hands in the showdown payload", () => {
+    let shownCount = 0;
+    let finished = false;
+    const t = new Table(
+      cfg,
+      {
+        onStateChange: () => {},
+        onActionTimeout: () => {},
+        onHandFinished: (_table, payload) => {
+          finished = true;
+          shownCount = payload.shownHands.length;
+        },
+      },
+      () => 0,
+    );
+    t.sitDown({ playerId: 1, username: "a", buyIn: 200 });
+    t.sitDown({ playerId: 2, username: "b", buyIn: 200 });
+    t.setReady(1, true);
+    t.setReady(2, true);
+    t.startHand();
+
+    for (const seat of t.seats) {
+      if (seat.inCurrentHand) seat.showCardsAtShowdown = true;
+    }
+
+    while (t.engine) {
+      const seatIdx = t.engine.toActSeatIndex!;
+      const engineSeat = t.engine.getSeat(seatIdx)!;
+      const toCall = t.engine.currentBet - engineSeat.betThisStreet;
+      t.applyAction(
+        t.seats[seatIdx]!.playerId!,
+        toCall > 0 ? { type: "call" } : { type: "check" },
+      );
+    }
+
+    expect(finished).toBe(true);
+    expect(shownCount).toBe(2);
+  });
+});

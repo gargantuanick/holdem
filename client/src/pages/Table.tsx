@@ -16,12 +16,24 @@ export function TablePage() {
   const { tableId } = useParams<{ tableId: string }>();
   const navigate = useNavigate();
   const { profile, wallet, logout } = useSession();
-  const { state, chat, history, lastHand, errorBanner, connected } = useGameState();
+  const {
+    state: latestState,
+    chat,
+    history,
+    lastHand,
+    errorBanner,
+    connected,
+  } = useGameState();
+  const state = latestState?.config.id === tableId ? latestState : null;
+  const localPlayerId = profile?.id ?? null;
+  const mySeat =
+    state?.seats.find((s) => s.playerId === localPlayerId) ?? null;
   const [chatOpen, setChatOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [profileOf, setProfileOf] = useState<string | null>(null);
   const [unseenChat, setUnseenChat] = useState(0);
   const [rebuyOpen, setRebuyOpen] = useState(false);
+  const [showCardsHand, setShowCardsHand] = useState<number | null>(null);
   const [_tick, setTick] = useState(0);
 
   // Force re-render once per second so the timer bar visibly progresses.
@@ -90,6 +102,9 @@ export function TablePage() {
   useEffect(() => {
     if (chatOpen) setUnseenChat(0);
   }, [chatOpen]);
+  useEffect(() => {
+    setShowCardsHand(null);
+  }, [state?.handNumber, localPlayerId]);
 
   const leave = useCallback(() => {
     if (!tableId) return;
@@ -101,9 +116,6 @@ export function TablePage() {
   if (!tableId) {
     return <div className="p-6 text-white">No table id</div>;
   }
-  const localPlayerId = profile?.id ?? null;
-  const mySeat =
-    state?.seats.find((s) => s.playerId === localPlayerId) ?? null;
   const sitOut = (out: boolean) => {
     if (!tableId) return;
     getSocket().emit("table:sitOut", { tableId, sittingOut: out });
@@ -111,6 +123,11 @@ export function TablePage() {
   const setReady = (ready: boolean) => {
     if (!tableId) return;
     getSocket().emit("table:setReady", { tableId, ready });
+  };
+  const requestShowCards = () => {
+    if (!tableId || !state) return;
+    getSocket().emit("table:showCards", { tableId });
+    setShowCardsHand(state.handNumber);
   };
 
   // Start gate: shown to any seated player who isn't currently in a hand.
@@ -126,6 +143,9 @@ export function TablePage() {
   const readyCount = eligiblePlayers.filter((s) => s.ready).length;
   const showStartGate =
     !!state && !!mySeat && !mySeat.sittingOut && !mySeat.hasCards;
+  const canShowCards =
+    !!state && !!mySeat?.hasCards && state.street !== "idle";
+  const showCardsArmed = showCardsHand === state?.handNumber;
 
   return (
     <div className="h-dvh w-full bg-felt-900 text-white safe-top flex flex-col overflow-hidden">
@@ -242,6 +262,19 @@ export function TablePage() {
                 >
                   {mySeat.sittingOut ? "Sit in" : "Sit out"}
                 </button>
+                {canShowCards && (
+                  <button
+                    onClick={requestShowCards}
+                    disabled={showCardsArmed}
+                    className={`px-2 py-1 rounded-md ${
+                      showCardsArmed
+                        ? "bg-chip-gold/20 text-chip-gold"
+                        : "bg-white/8 hover:bg-white/12"
+                    }`}
+                  >
+                    {showCardsArmed ? "Will show" : "Show cards"}
+                  </button>
+                )}
                 {state && mySeat.stack < state.config.bigBlind && state.toActSeat !== mySeat.seatIndex && (
                   <button
                     onClick={() => setRebuyOpen(true)}

@@ -318,6 +318,9 @@ export function registerSocketHandlers(
       if (!table) return;
       try {
         table.setSittingOut(sock.data.playerId, sittingOut);
+        if (!sittingOut && table.canStartHand()) {
+          table.startHand();
+        }
       } catch {
         // ignore
       }
@@ -448,6 +451,11 @@ export function registerSocketHandlers(
     sock.on("table:chat", ({ tableId, message }) => {
       if (!sock.data.playerId || !sock.data.username) return;
       if (typeof message !== "string") return;
+      const table = lobby.getTable(tableId);
+      if (!table || !table.findSeatByPlayer(sock.data.playerId)) {
+        sock.emit("error", "Not seated at this table.");
+        return;
+      }
       // Hard cap: 200 chars after trim. Drop anything over the limit silently
       // — the client also enforces 200 via maxLength on the input.
       const trimmed = message.trim().slice(0, 200);

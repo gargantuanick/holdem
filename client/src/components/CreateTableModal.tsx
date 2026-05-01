@@ -17,14 +17,26 @@ export function CreateTableModal({
   const [maxBuyIn, setMaxBuyIn] = useState(1000);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const validationError = validateTableConfig({
+    name,
+    maxSeats,
+    smallBlind,
+    bigBlind,
+    minBuyIn,
+    maxBuyIn,
+  });
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
     setBusy(true);
     setError(null);
     getSocket().emit(
       "lobby:create",
-      { name, maxSeats, smallBlind, bigBlind, minBuyIn, maxBuyIn },
+      { name: name.trim(), maxSeats, smallBlind, bigBlind, minBuyIn, maxBuyIn },
       (res) => {
         setBusy(false);
         if (!res.ok) {
@@ -97,9 +109,11 @@ export function CreateTableModal({
             />
           </Field>
         </div>
-        {error && <div className="text-sm text-red-300">{error}</div>}
+        {(validationError ?? error) && (
+          <div className="text-sm text-red-300">{validationError ?? error}</div>
+        )}
         <button
-          disabled={busy}
+          disabled={busy || !!validationError}
           type="submit"
           className="w-full rounded-lg bg-chip-gold text-black font-semibold py-3 disabled:opacity-50"
         >
@@ -109,6 +123,43 @@ export function CreateTableModal({
       <style>{`.input { width:100%; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12); color: white; padding: 0.6rem 0.75rem; border-radius: 0.5rem; }`}</style>
     </Modal>
   );
+}
+
+function validateTableConfig({
+  name,
+  maxSeats,
+  smallBlind,
+  bigBlind,
+  minBuyIn,
+  maxBuyIn,
+}: {
+  name: string;
+  maxSeats: number;
+  smallBlind: number;
+  bigBlind: number;
+  minBuyIn: number;
+  maxBuyIn: number;
+}): string | null {
+  const checks = { maxSeats, smallBlind, bigBlind, minBuyIn, maxBuyIn };
+  const labels: Record<keyof typeof checks, string> = {
+    maxSeats: "Max seats",
+    smallBlind: "Small blind",
+    bigBlind: "Big blind",
+    minBuyIn: "Min buy-in",
+    maxBuyIn: "Max buy-in",
+  };
+  for (const [label, value] of Object.entries(checks)) {
+    if (!Number.isFinite(value) || !Number.isInteger(value)) {
+      return `${labels[label as keyof typeof checks]} must be a whole number`;
+    }
+  }
+  if (name.trim().length === 0) return "Name is required";
+  if (maxSeats < 2 || maxSeats > 5) return "Max seats must be 2–5";
+  if (smallBlind <= 0 || bigBlind <= 0) return "Blinds must be positive";
+  if (smallBlind >= bigBlind) return "Small blind must be below big blind";
+  if (minBuyIn < bigBlind * 2) return "Min buy-in must be at least 2 BB";
+  if (maxBuyIn < minBuyIn) return "Max buy-in must be at least min buy-in";
+  return null;
 }
 
 function Field({

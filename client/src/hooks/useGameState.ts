@@ -1,4 +1,12 @@
-import { createContext, useContext, useEffect, useState, type ReactNode, createElement } from "react";
+import {
+  createContext,
+  createElement,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import type {
   ChatMessage,
   HandFinishedPayload,
@@ -27,10 +35,19 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
   const [lastHand, setLastHand] = useState<HandFinishedPayload | null>(null);
   const [errorBanner, setErrorBanner] = useState<string | null>(null);
   const [connected, setConnected] = useState<boolean>(() => getSocket().connected);
+  const currentTableId = useRef<string | null>(null);
 
   useEffect(() => {
     const sock = getSocket();
-    const onState = (s: PublicTableState) => setState(s);
+    const onState = (s: PublicTableState) => {
+      if (currentTableId.current !== s.config.id) {
+        currentTableId.current = s.config.id;
+        setChat([]);
+        setHistory([]);
+        setLastHand(null);
+      }
+      setState(s);
+    };
     const onChat = (m: ChatMessage) =>
       setChat((prev) => [...prev.slice(-49), m]);
     const onHist = (h: HandHistoryEntry[]) => setHistory(h);

@@ -21,6 +21,13 @@ export function BettingControls({ state, tableId, localPlayerId }: Props) {
   const toCall = isMyTurn ? state.currentBet - (seat?.betThisStreet ?? 0) : 0;
   const canCheck = toCall === 0;
   const stack = seat?.stack ?? 0;
+  const callAmount = Math.min(toCall, stack);
+  const isCallAllIn = !canCheck && callAmount === stack;
+  const callLabel = canCheck
+    ? "Check"
+    : isCallAllIn
+      ? `Call ${formatChips(callAmount)} all-in`
+      : `Call ${formatChips(toCall)}`;
   const minRaiseTotal = state.currentBet === 0
     ? Math.max(state.minRaise, state.config.bigBlind)
     : state.currentBet + state.minRaise;
@@ -181,7 +188,7 @@ export function BettingControls({ state, tableId, localPlayerId }: Props) {
               : "bg-blue-700/80 hover:bg-blue-700 text-white active:scale-[0.98]"
           }`}
         >
-          {canCheck ? "Check" : `Call ${formatChips(toCall)}`}
+          {callLabel}
         </button>
         <button
           disabled={

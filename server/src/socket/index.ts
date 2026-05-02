@@ -309,6 +309,17 @@ export function registerSocketHandlers(
     sock.on("table:requestState", ({ tableId }) => {
       const table = lobby.getTable(tableId);
       if (!table) return;
+      // Ensure the requester is in the socket.io room. Without this, a
+      // tab takeover (Tab B logs in as same username → Tab A kicked) sees
+      // the snapshot once but never receives push broadcasts because only
+      // the original `table:join` called sock.join. Same fix covers any
+      // client that rebuilt its connection without re-running buyIn.
+      if (
+        sock.data.playerId !== null &&
+        table.findSeatByPlayer(sock.data.playerId)
+      ) {
+        sock.join(tableId);
+      }
       sock.emit("table:state", table.publicState(sock.data.playerId));
     });
 
@@ -497,6 +508,7 @@ export function registerSocketHandlers(
 }
 
 /**
+<<<<<<< Updated upstream
  * Re-join the socket to every table room where this player still has a seat.
  *
  * On reconnect, socket.io issues a fresh socket id with no room memberships —
@@ -509,6 +521,14 @@ export function registerSocketHandlers(
  * UI freezing on "my turn" while the server moves on, then "not your
  * turn" errors when the player retries — common on iOS where backgrounding
  * the tab silently drops the WebSocket.
+=======
+ * Re-attach this socket to the socket.io rooms for any tables the player
+ * is currently seated at. Called after handshake auto-resume, auth:login,
+ * and auth:resume so a fresh socket gets push broadcasts without having
+ * to re-run table:join. Without this, a tab takeover (login from a 2nd
+ * tab) leaves the new socket out of the table room and it sees only
+ * snapshot state — every opponent action is invisible until refresh.
+>>>>>>> Stashed changes
  */
 function rejoinSeatedRooms(
   sock: Socket<ClientToServerEvents, ServerToClientEvents, Record<string, never>, SocketData>,
@@ -517,7 +537,12 @@ function rejoinSeatedRooms(
 ): void {
   for (const summary of lobby.listTables()) {
     const table = lobby.getTable(summary.id);
+<<<<<<< Updated upstream
     if (table && table.findSeatByPlayer(playerId)) {
+=======
+    if (!table) continue;
+    if (table.findSeatByPlayer(playerId)) {
+>>>>>>> Stashed changes
       sock.join(summary.id);
     }
   }

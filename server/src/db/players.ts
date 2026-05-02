@@ -84,6 +84,55 @@ export async function getPlayerByUsername(
   return rows[0] ? rowToProfile(rows[0]) : null;
 }
 
+export async function listPlayersForAdmin(args?: {
+  query?: string;
+  limit?: number;
+}): Promise<PlayerProfile[]> {
+  const sql = getSql();
+  const query = args?.query?.trim() ?? "";
+  const limit = Math.max(1, Math.min(args?.limit ?? 100, 500));
+  const pattern = `%${query}%`;
+  const rows =
+    query.length > 0
+      ? await sql<PlayerRow[]>`
+          SELECT * FROM players
+          WHERE username ILIKE ${pattern}
+          ORDER BY last_seen_at DESC, id DESC
+          LIMIT ${limit}
+        `
+      : await sql<PlayerRow[]>`
+          SELECT * FROM players
+          ORDER BY last_seen_at DESC, id DESC
+          LIMIT ${limit}
+        `;
+  return rows.map(rowToProfile);
+}
+
+export async function setPlayerWallet(
+  playerId: number,
+  walletChips: number,
+): Promise<PlayerProfile> {
+  if (!Number.isInteger(playerId) || playerId <= 0) {
+    throw new Error("invalid player id");
+  }
+  if (
+    !Number.isInteger(walletChips) ||
+    walletChips < 0 ||
+    walletChips > 1_000_000_000
+  ) {
+    throw new Error("wallet must be a whole number between 0 and 1,000,000,000");
+  }
+  const sql = getSql();
+  const rows = await sql<PlayerRow[]>`
+    UPDATE players
+    SET wallet_chips = ${walletChips}
+    WHERE id = ${playerId}
+    RETURNING *
+  `;
+  if (!rows[0]) throw new Error("player not found");
+  return rowToProfile(rows[0]);
+}
+
 /**
  * Adjusts the wallet by `delta`. Returns the new wallet.
  * Throws if the result would go negative.

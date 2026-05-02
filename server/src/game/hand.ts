@@ -119,6 +119,38 @@ export class HandEngine {
 
     this.postBlinds();
     this.toActSeatIndex = this.firstToActPreflop();
+    // After posting blinds, the action might already be effectively over.
+    // The classic case: heads-up where SB has fewer chips than the small
+    // blind. SB posts and is all-in; nobody else can act meaningfully
+    // (BB has matched currentBet, no opponent left to call/raise). We
+    // must auto-run-out the board instead of leaving toActSeatIndex
+    // pointing at an all-in seat that the engine then refuses to let act.
+    if (this.shouldAutoRunOutPreflop()) {
+      this.toActSeatIndex = null;
+      this.advanceStreet();
+    }
+  }
+
+  /**
+   * Returns true if preflop action is trivially closed after blinds:
+   *   - 0 acting (everyone all-in from posting), or
+   *   - 1 acting and that player has already matched the highest all-in
+   *     bet — there is nobody for them to extract chips from.
+   *
+   * In either case the engine should deal the board to showdown rather
+   * than wait for input from a seat that can't (or shouldn't) act.
+   */
+  private shouldAutoRunOutPreflop(): boolean {
+    const acting = this.actingSeats();
+    if (acting.length === 0) return true;
+    if (acting.length > 1) return false;
+    let maxAllInBet = 0;
+    for (const s of this.seats) {
+      if (s.isAllIn && !s.hasFolded && s.betThisStreet > maxAllInBet) {
+        maxAllInBet = s.betThisStreet;
+      }
+    }
+    return acting[0]!.betThisStreet >= maxAllInBet;
   }
 
   /** Seats still in the hand (not folded). */
@@ -189,6 +221,15 @@ export class HandEngine {
     const seat = this.getSeat(seatIndex);
     if (!seat) throw new Error("no such seat");
     if (seat.hasFolded || seat.isAllIn) throw new Error("seat cannot act");
+    // Defense-in-depth: reject NaN/Infinity at the engine boundary. The
+    // socket layer's isValidAction guards against these for incoming
+    // payloads, but any future caller that bypasses the socket (tests,
+    // refactors, internal API) would otherwise corrupt the chip universe
+    // — every comparison with NaN evaluates false and the engine commits
+    // a NaN delta, poisoning stack/bet/totalCommitted.
+    if (action.amount !== undefined && !Number.isFinite(action.amount)) {
+      throw new Error("amount must be a finite number");
+    }
 
     switch (action.type) {
       case "fold":

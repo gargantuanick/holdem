@@ -239,3 +239,9 @@ export interface LeaderboardEntry {
   handsWon: number;
   handsPlayed: number;
 }
+
+export interface AdminPlayerSummary extends PlayerProfile {}
+
+export interface AdminPlayersResponse {
+  players: AdminPlayerSummary[];
+}

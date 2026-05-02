@@ -41,6 +41,13 @@ export interface TableSeat {
   showCardsAtShowdown: boolean;
   /** Set when player wants to leave; will be removed after current hand ends. */
   pendingLeave: boolean;
+  /**
+   * Set when a player toggles sit-out while in the current hand. Standard
+   * poker behaviour: sit-out queues to the next hand boundary so it can't
+   * be used to dodge an in-progress decision (which blocks every other
+   * player while they wait out the action timer).
+   */
+  pendingSitOut: boolean;
   /** True if this player has clicked "Start" while waiting for the first hand. */
   ready: boolean;
   /** Mirror of HandSeatState.canStillRaise; default true outside a hand. */
@@ -93,6 +100,7 @@ export class Table {
       holeCards: null,
       showCardsAtShowdown: false,
       pendingLeave: false,
+      pendingSitOut: false,
       ready: false,
       canStillRaise: true,
       lastAction: null,
@@ -181,6 +189,7 @@ export class Table {
       s.hasFolded = false;
       s.isAllIn = false;
       s.pendingLeave = false;
+      s.pendingSitOut = false;
       s.canStillRaise = true;
       s.lastAction = null;
     }
@@ -202,6 +211,7 @@ export class Table {
     seat.holeCards = null;
     seat.showCardsAtShowdown = false;
     seat.pendingLeave = false;
+    seat.pendingSitOut = false;
     seat.isConnected = true;
     seat.ready = false;
     seat.canStillRaise = true;
@@ -239,8 +249,28 @@ export class Table {
   setSittingOut(playerId: number, sittingOut: boolean): void {
     const seat = this.findSeatByPlayer(playerId);
     if (!seat) throw new Error("not seated");
-    seat.sittingOut = sittingOut;
+    // Sitting OUT mid-hand is queued — applying it immediately would
+    // either let the player dodge their decision (if it's their turn) or
+    // freeze the table while every other player waits out their action
+    // timer. Sitting back IN can take effect immediately; it doesn't
+    // affect the in-progress hand because the player wasn't dealt in.
+    if (sittingOut && this.engine && seat.inCurrentHand && !seat.hasFolded) {
+      seat.pendingSitOut = true;
+    } else {
+      seat.sittingOut = sittingOut;
+      seat.pendingSitOut = false;
+    }
     this.events.onStateChange(this);
+  }
+
+  /** Apply any deferred pendingSitOut flags. Called at hand finish. */
+  private applyPendingSitOuts(): void {
+    for (const s of this.seats) {
+      if (s.pendingSitOut) {
+        s.sittingOut = true;
+        s.pendingSitOut = false;
+      }
+    }
   }
 
   setConnected(playerId: number, connected: boolean): void {
@@ -342,13 +372,17 @@ export class Table {
       throw new Error("not your turn");
     }
     const streetBeforeAction = this.engine.street;
+    const engineSeatBefore = this.engine.getSeat(seat.seatIndex);
+    const betBeforeAction = engineSeatBefore?.betThisStreet ?? seat.betThisStreet;
     this.engine.applyAction(seat.seatIndex, action);
+    const engineSeatAfter = this.engine.getSeat(seat.seatIndex);
+    const betAfterAction = engineSeatAfter?.betThisStreet ?? betBeforeAction;
     // Stamp lastAction *after* the engine commits so we know the action was
     // legal. Amount reflects what they actually committed this street, which
     // is the meaningful number for the UI ("Called 50", "Bet 100").
     seat.lastAction = {
       type: action.type,
-      amount: action.amount,
+      amount: lastActionAmount(action, betBeforeAction, betAfterAction),
       at: Date.now(),
     };
     // If the street changed (action closed the round), wipe everyone's
@@ -401,7 +435,7 @@ export class Table {
     const ts = this.seats[seatIndex];
     if (ts) {
       ts.sittingOut = true;
-      ts.lastAction = { type: "fold", at: Date.now() };
+      ts.lastAction = { type: action.type, at: Date.now() };
     }
     this.syncFromEngine();
     if (this.engine.phase === "complete") {
@@ -477,6 +511,12 @@ export class Table {
     this.lastHand = payload;
     this.clearActionTimer();
     this.actionDeadline = null;
+
+    // Apply any deferred sit-out toggles now that the hand is done. This
+    // takes effect BEFORE onHandFinished so the lobby's hand-finish hook
+    // and any auto-start eligibility check see the up-to-date sittingOut
+    // flags.
+    this.applyPendingSitOuts();
 
     // pendingLeave is intentionally preserved here — the lobby reads it in
     // its handleHandFinished hook to actually removeSeat + creditWallet.
@@ -609,5 +649,22 @@ export class Table {
   private computeLivePot(): number {
     if (!this.engine) return 0;
     return this.engine.seats.reduce((a, s) => a + s.totalCommitted, 0);
+  }
+}
+
+function lastActionAmount(
+  action: PlayerAction,
+  betBeforeAction: number,
+  betAfterAction: number,
+): number | undefined {
+  switch (action.type) {
+    case "call":
+    case "allin":
+      return Math.max(0, betAfterAction - betBeforeAction);
+    case "bet":
+    case "raise":
+      return betAfterAction;
+    default:
+      return undefined;
   }
 }

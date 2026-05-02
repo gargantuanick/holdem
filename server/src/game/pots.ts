@@ -54,6 +54,15 @@ export function computePots(seats: SeatContribution[]): ComputedPot[] {
       if (eligible.length === 0 && prevPot) {
         // Folded-only orphan layer — merge into previous pot
         prevPot.amount += amount;
+      } else if (eligible.length === 0 && !prevPot) {
+        // Nobody at this level can win and there's no preceding pot to
+        // merge into. The engine's last-man-standing branch should have
+        // fired before this state can be reached. Throwing here makes a
+        // future regression impossible to ship silently — chips can't
+        // disappear into a pot nobody is eligible to win.
+        throw new Error(
+          `computePots: chip-leak guard tripped (level=${level} amount=${amount}; every contributor folded). Caller must award via last-man-standing before reaching this state.`,
+        );
       } else if (
         prevPot &&
         sameEligibility(prevPot.eligibleSeatIndices, eligible)

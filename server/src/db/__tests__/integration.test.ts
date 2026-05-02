@@ -13,6 +13,8 @@ import {
   debitWallet,
   findOrCreatePlayer,
   getPlayerById,
+  listPlayersForAdmin,
+  setPlayerWallet,
   STARTING_WALLET,
   tryRefill,
   validateUsername,
@@ -149,5 +151,21 @@ describeIfDb("DB integration", () => {
     expect(aRank).toBeDefined();
     expect(bRank).toBeDefined();
     expect(aRank!.rank).toBeLessThan(bRank!.rank);
+  });
+
+  it("admin player list and wallet set work", async () => {
+    const p = await findOrCreatePlayer("t_admin_wallet");
+    const updated = await setPlayerWallet(p.id, 12345);
+    expect(updated.walletChips).toBe(12345);
+
+    const players = await listPlayersForAdmin({
+      query: "t_admin_wallet",
+      limit: 10,
+    });
+    expect(players).toHaveLength(1);
+    expect(players[0]!.id).toBe(p.id);
+    expect(players[0]!.walletChips).toBe(12345);
+
+    await expect(setPlayerWallet(p.id, -1)).rejects.toThrow(/wallet/);
   });
 });

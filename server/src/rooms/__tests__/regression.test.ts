@@ -165,3 +165,39 @@ describe("show cards at showdown", () => {
     expect(shownCount).toBe(2);
   });
 });
+
+describe("action feedback", () => {
+  it("records the amount committed by call actions for the action pill", () => {
+    const t = new Table(cfg, noopEvents);
+    t.sitDown({ playerId: 1, username: "a", buyIn: 200 });
+    t.sitDown({ playerId: 2, username: "b", buyIn: 200 });
+    t.setReady(1, true);
+    t.setReady(2, true);
+    t.startHand();
+
+    t.applyAction(1, { type: "call" });
+
+    expect(t.findSeatByPlayer(1)?.lastAction).toMatchObject({
+      type: "call",
+      amount: 5,
+    });
+  });
+
+  it("shows timeout checks as checks instead of folds", () => {
+    const t = new Table(cfg, noopEvents);
+    t.sitDown({ playerId: 1, username: "a", buyIn: 200 });
+    t.sitDown({ playerId: 2, username: "b", buyIn: 200 });
+    t.setReady(1, true);
+    t.setReady(2, true);
+    t.startHand();
+
+    t.applyAction(1, { type: "call" });
+    t.applyAction(2, { type: "check" });
+    const timeoutSeat = t.engine!.toActSeatIndex!;
+
+    t.forceTimeoutAction();
+
+    expect(t.seats[timeoutSeat]!.lastAction?.type).toBe("check");
+    expect(t.seats[timeoutSeat]!.sittingOut).toBe(true);
+  });
+});

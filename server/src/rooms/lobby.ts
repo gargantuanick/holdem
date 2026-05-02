@@ -207,7 +207,13 @@ export class Lobby {
       return { wallet: 0, deferred: true };
     }
     if (stack > 0) {
-      const wallet = await creditWallet(args.playerId, stack);
+      // Use the same retry path the buy-in rollback uses. Without it, a
+      // single transient DB hiccup loses the player's chips: the seat is
+      // already empty (standUp ran first) and a thrown credit means the
+      // wallet was never updated. creditWithRetry retries up to 5x and
+      // ultimately throws with a CRITICAL log so the chips can be
+      // reconciled manually rather than disappearing.
+      const wallet = await creditWithRetry(args.playerId, stack);
       invalidateLeaderboardCache();
       return { wallet, deferred: false };
     }
@@ -244,15 +250,22 @@ export class Lobby {
       const stack = table.removeSeat(seat);
       refunds.push({ playerId, stack });
     }
-    // Pass 2 — credit wallets in parallel, swallow per-credit failures.
+    // Pass 2 — credit wallets in parallel. Each goes through the retry
+    // helper; a final terminal failure logs CRITICAL but doesn't reject
+    // the parallel batch (admin still wants the table cleared even if one
+    // wallet write keeps failing — the alternative is a half-cleared
+    // table).
     await Promise.all(
       refunds
         .filter((r) => r.stack > 0)
         .map(async (r) => {
           try {
-            await creditWallet(r.playerId, r.stack);
+            await creditWithRetry(r.playerId, r.stack);
           } catch (err) {
-            console.error("[lobby] adminForceClear credit failed:", err);
+            console.error(
+              `[lobby] adminForceClear: CRITICAL chip loss for player ${r.playerId} stack=${r.stack}:`,
+              err,
+            );
           }
         }),
     );
@@ -357,7 +370,7 @@ export class Lobby {
       const stack = table.removeSeat(seat);
       if (stack > 0) {
         try {
-          const newWallet = await creditWallet(playerId, stack);
+          const newWallet = await creditWithRetry(playerId, stack);
           // Push the updated wallet to the leaving player's socket if still connected.
           const sockets = await this.io.fetchSockets();
           for (const s of sockets) {
@@ -367,7 +380,10 @@ export class Lobby {
             }
           }
         } catch (err) {
-          console.error("[lobby] pendingLeave credit failed:", err);
+          console.error(
+            `[lobby] pendingLeave: CRITICAL chip loss for player ${playerId} stack=${stack}:`,
+            err,
+          );
         }
       }
     }
@@ -409,23 +425,40 @@ export class Lobby {
 }
 
 /**
- * Best-effort wallet refund: retries up to 5 times with exponential backoff
- * before logging a hard error. Used by buyIn/rebuy rollback paths so we
- * don't silently strand a player's chips on a transient DB hiccup.
+ * Best-effort wallet refund (legacy, used by buyIn/rebuy rollback paths).
+ * Wraps creditWithRetry but swallows the final error after logging since
+ * the rollback caller has nothing meaningful to do with it (the original
+ * action they were rolling back has already errored).
  */
 async function refundWithRetry(playerId: number, amount: number): Promise<void> {
+  try {
+    await creditWithRetry(playerId, amount);
+  } catch (err) {
+    console.error(
+      `[lobby] CRITICAL: refund of ${amount} chips for player ${playerId} failed after 5 attempts:`,
+      err,
+    );
+  }
+}
+
+/**
+ * Credit a player's wallet with retry. Returns the new wallet balance on
+ * success. Throws after 5 failed attempts with exponential backoff —
+ * caller decides what to do with a terminal failure (typically log
+ * CRITICAL and surface to ops).
+ *
+ * Used by every cash-out path (cashOut, pendingLeave, adminForceClear)
+ * so a single transient DB hiccup can never silently lose chips.
+ */
+async function creditWithRetry(playerId: number, amount: number): Promise<number> {
   let lastErr: unknown;
   for (let attempt = 0; attempt < 5; attempt++) {
     try {
-      await creditWallet(playerId, amount);
-      return;
+      return await creditWallet(playerId, amount);
     } catch (err) {
       lastErr = err;
       await new Promise((r) => setTimeout(r, 50 * Math.pow(2, attempt)));
     }
   }
-  console.error(
-    `[lobby] CRITICAL: refund of ${amount} chips for player ${playerId} failed after 5 attempts:`,
-    lastErr,
-  );
+  throw lastErr ?? new Error("creditWithRetry exhausted");
 }

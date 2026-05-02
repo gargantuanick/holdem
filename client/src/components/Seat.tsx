@@ -154,7 +154,6 @@ function ActionPill({
   const showAmount =
     typeof action.amount === "number" &&
     (action.type === "bet" ||
-      action.type === "call" ||
       action.type === "raise" ||
       action.type === "allin");
   return (
@@ -163,7 +162,7 @@ function ActionPill({
       className={`absolute -top-5 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full text-xs sm:text-sm font-extrabold uppercase tracking-wider whitespace-nowrap pointer-events-none z-10 animate-action-pill ${style!.cls}`}
     >
       {style!.label}
-      {showAmount ? ` ${formatChips(action.amount)}` : ""}
+      {showAmount ? ` ${action.amount!.toLocaleString()}` : ""}
     </div>
   );
 }

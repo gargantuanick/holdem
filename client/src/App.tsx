@@ -2,7 +2,6 @@ import { Route, Routes, Navigate } from "react-router-dom";
 import { LobbyPage } from "./pages/Lobby";
 import { TablePage } from "./pages/Table";
 import { LeaderboardPage } from "./pages/Leaderboard";
-import { AdminPage } from "./pages/Admin";
 import { LoginGate } from "./components/LoginGate";
 import { GameStateProvider } from "./hooks/useGameState";
 
@@ -15,7 +14,6 @@ export default function App() {
           <Route path="/lobby" element={<LobbyPage />} />
           <Route path="/table/:tableId" element={<TablePage />} />
           <Route path="/leaderboard" element={<LeaderboardPage />} />
-          <Route path="/admin" element={<AdminPage />} />
           <Route path="*" element={<Navigate to="/lobby" replace />} />
         </Routes>
       </GameStateProvider>

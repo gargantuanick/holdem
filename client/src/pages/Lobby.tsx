@@ -108,14 +108,6 @@ export function LobbyPage() {
           >
             Leaderboard
           </Link>
-          {isAdmin && (
-            <Link
-              to="/admin"
-              className="text-xs text-chip-gold hover:text-chip-gold/80"
-            >
-              Admin
-            </Link>
-          )}
         </div>
         <div className="flex items-center gap-2">
           <WalletBadge wallet={wallet} />

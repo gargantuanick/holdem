@@ -89,6 +89,7 @@ export function registerSocketHandlers(
       sock.data.username = player.username;
       sock.data.token = handshakeToken;
       lobby.handleReconnect(player.id);
+      rejoinSeatedRooms(sock, lobby, player.id);
       next();
     } catch (err) {
       console.error("[auth] handshake auto-resume failed:", err);
@@ -127,6 +128,7 @@ export function registerSocketHandlers(
         sock.data.username = player.username;
         sock.data.token = token;
         lobby.handleReconnect(player.id);
+        rejoinSeatedRooms(sock, lobby, player.id);
         cb({ ok: true, token, player });
       } catch (err) {
         console.error("[auth] login error:", err);
@@ -152,6 +154,7 @@ export function registerSocketHandlers(
         sock.data.username = player.username;
         sock.data.token = token;
         lobby.handleReconnect(player.id);
+        rejoinSeatedRooms(sock, lobby, player.id);
         cb({ ok: true, player });
       } catch (err) {
         console.error("[auth] resume error:", err);
@@ -491,6 +494,33 @@ export function registerSocketHandlers(
       }
     });
   });
+}
+
+/**
+ * Re-join the socket to every table room where this player still has a seat.
+ *
+ * On reconnect, socket.io issues a fresh socket id with no room memberships —
+ * the OLD socket's `sock.join(tableId)` from the original `table:join`
+ * doesn't carry over. Without this rebind, the player's new socket is
+ * authenticated but invisible to `Lobby.broadcastState` and other room-
+ * scoped emits, so they stop receiving `table:state`, `table:handFinished`,
+ * `table:history`, and `table:chat` while still being able to *send*
+ * actions (those route by playerId, not room). The visible symptom is the
+ * UI freezing on "my turn" while the server moves on, then "not your
+ * turn" errors when the player retries — common on iOS where backgrounding
+ * the tab silently drops the WebSocket.
+ */
+function rejoinSeatedRooms(
+  sock: Socket<ClientToServerEvents, ServerToClientEvents, Record<string, never>, SocketData>,
+  lobby: Lobby,
+  playerId: number,
+): void {
+  for (const summary of lobby.listTables()) {
+    const table = lobby.getTable(summary.id);
+    if (table && table.findSeatByPlayer(playerId)) {
+      sock.join(summary.id);
+    }
+  }
 }
 
 function kickPriorSocket(io: Server, playerId: number, currentSocketId: string) {

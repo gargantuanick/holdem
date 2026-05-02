@@ -508,27 +508,28 @@ export function registerSocketHandlers(
 }
 
 /**
-<<<<<<< Updated upstream
- * Re-join the socket to every table room where this player still has a seat.
- *
- * On reconnect, socket.io issues a fresh socket id with no room memberships —
- * the OLD socket's `sock.join(tableId)` from the original `table:join`
- * doesn't carry over. Without this rebind, the player's new socket is
- * authenticated but invisible to `Lobby.broadcastState` and other room-
- * scoped emits, so they stop receiving `table:state`, `table:handFinished`,
- * `table:history`, and `table:chat` while still being able to *send*
- * actions (those route by playerId, not room). The visible symptom is the
- * UI freezing on "my turn" while the server moves on, then "not your
- * turn" errors when the player retries — common on iOS where backgrounding
- * the tab silently drops the WebSocket.
-=======
  * Re-attach this socket to the socket.io rooms for any tables the player
  * is currently seated at. Called after handshake auto-resume, auth:login,
  * and auth:resume so a fresh socket gets push broadcasts without having
- * to re-run table:join. Without this, a tab takeover (login from a 2nd
- * tab) leaves the new socket out of the table room and it sees only
- * snapshot state — every opponent action is invisible until refresh.
->>>>>>> Stashed changes
+ * to re-run table:join.
+ *
+ * Two distinct failure modes this fixes:
+ *
+ *   1. iOS / mobile reconnect. Backgrounding the tab silently drops the
+ *      WebSocket. socket.io issues a fresh socket id on reconnect with
+ *      no room memberships — the OLD socket's `sock.join(tableId)` from
+ *      `table:join` doesn't carry over. Without this rebind, the player's
+ *      new socket is authenticated but invisible to `Lobby.broadcastState`
+ *      and other room-scoped emits, so they stop receiving `table:state`,
+ *      `table:handFinished`, `table:history`, and `table:chat` while
+ *      still being able to *send* actions (those route by playerId, not
+ *      room). The visible symptom is the UI freezing on "my turn" while
+ *      the server moves on, then "not your turn" errors on retry.
+ *
+ *   2. Tab takeover. Tab B logs in as the same username → Tab A is
+ *      kicked. Tab B's socket is now active but never went through
+ *      `table:join`, so it isn't in the room. Same symptom: snapshot on
+ *      mount, then no push updates until refresh.
  */
 function rejoinSeatedRooms(
   sock: Socket<ClientToServerEvents, ServerToClientEvents, Record<string, never>, SocketData>,
@@ -537,12 +538,8 @@ function rejoinSeatedRooms(
 ): void {
   for (const summary of lobby.listTables()) {
     const table = lobby.getTable(summary.id);
-<<<<<<< Updated upstream
-    if (table && table.findSeatByPlayer(playerId)) {
-=======
     if (!table) continue;
     if (table.findSeatByPlayer(playerId)) {
->>>>>>> Stashed changes
       sock.join(summary.id);
     }
   }

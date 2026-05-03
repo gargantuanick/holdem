@@ -84,6 +84,58 @@ export async function getPlayerByUsername(
   return rows[0] ? rowToProfile(rows[0]) : null;
 }
 
+export async function listPlayers(
+  query: string,
+  limit: number,
+): Promise<PlayerProfile[]> {
+  const sql = getSql();
+  const safeLimit = Math.max(1, Math.min(500, Math.floor(limit)));
+  const q = query.trim();
+  const rows = q
+    ? await sql<PlayerRow[]>`
+        SELECT *
+        FROM players
+        WHERE username ILIKE ${`%${q}%`}
+        ORDER BY last_seen_at DESC, id DESC
+        LIMIT ${safeLimit}
+      `
+    : await sql<PlayerRow[]>`
+        SELECT *
+        FROM players
+        ORDER BY last_seen_at DESC, id DESC
+        LIMIT ${safeLimit}
+      `;
+  return rows.map(rowToProfile);
+}
+
+export async function setPlayerWallet(
+  playerId: number,
+  walletChips: number,
+): Promise<PlayerProfile | null> {
+  const sql = getSql();
+  const rows = await sql<PlayerRow[]>`
+    UPDATE players
+    SET wallet_chips = ${walletChips}
+    WHERE id = ${playerId}
+    RETURNING *
+  `;
+  return rows[0] ? rowToProfile(rows[0]) : null;
+}
+
+export async function deletePlayers(
+  playerIds: number[],
+): Promise<PlayerProfile[]> {
+  const ids = Array.from(new Set(playerIds));
+  if (ids.length === 0) return [];
+  const sql = getSql();
+  const rows = await sql<PlayerRow[]>`
+    DELETE FROM players
+    WHERE id IN ${sql(ids)}
+    RETURNING *
+  `;
+  return rows.map(rowToProfile);
+}
+
 /**
  * Adjusts the wallet by `delta`. Returns the new wallet.
  * Throws if the result would go negative.

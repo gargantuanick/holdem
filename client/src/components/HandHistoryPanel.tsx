@@ -31,34 +31,36 @@ export function HandHistoryPanel({ entries, onClose }: Props) {
             </div>
           )}
           {entries.map((e) => (
-            <div
-              key={e.handNumber + e.endedAt}
-              className="rounded-md bg-white/5 border border-white/10 p-2"
-            >
-              <div className="text-white/50 text-[11px] mb-0.5">
-                #{e.handNumber} · {new Date(e.endedAt).toLocaleTimeString()} · pot{" "}
-                <span className="font-mono">{formatChips(e.potTotal)}</span>
-              </div>
-              {e.winners.map((w, i) => (
-                <div key={i}>
-                  <span className="text-chip-gold font-semibold">
-                    {w.username}
-                  </span>{" "}
-                  won <span className="font-mono">{formatChips(w.amount)}</span>
-                  {w.handDescription && (
-                    <span className="text-white/50"> · {w.handDescription}</span>
-                  )}
-                </div>
-              ))}
-              {e.communityCards && (
-                <div className="text-white/40 text-xs font-mono mt-0.5">
-                  {e.communityCards}
-                </div>
-              )}
-            </div>
+            <HistoryEntry key={e.handNumber + e.endedAt} entry={e} />
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+function HistoryEntry({ entry }: { entry: HandHistoryEntry }) {
+  const winners = Array.isArray(entry.winners) ? entry.winners : [];
+  return (
+    <div className="rounded-md bg-white/5 border border-white/10 p-2">
+      <div className="text-white/50 text-[11px] mb-0.5">
+        #{entry.handNumber} · {new Date(entry.endedAt).toLocaleTimeString()} · pot{" "}
+        <span className="font-mono">{formatChips(entry.potTotal)}</span>
+      </div>
+      {winners.map((w, i) => (
+        <div key={i}>
+          <span className="text-chip-gold font-semibold">{w.username}</span>{" "}
+          won <span className="font-mono">{formatChips(w.amount)}</span>
+          {w.handDescription && (
+            <span className="text-white/50"> · {w.handDescription}</span>
+          )}
+        </div>
+      ))}
+      {entry.communityCards && (
+        <div className="text-white/40 text-xs font-mono mt-0.5">
+          {entry.communityCards}
+        </div>
+      )}
     </div>
   );
 }

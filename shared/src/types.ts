@@ -27,6 +27,7 @@ export interface PublicSeat {
   isAllIn: boolean;
   sittingOut: boolean;
   isConnected: boolean;
+  isBot: boolean;
   /** True if this player has hit "Start" while waiting for the first hand. */
   ready: boolean;
   /**
@@ -146,7 +147,10 @@ export interface ClientToServerEvents {
   ) => void;
   "table:sitOut": (args: { tableId: string; sittingOut: boolean }) => void;
   "table:setReady": (args: { tableId: string; ready: boolean }) => void;
-  "table:requestState": (args: { tableId: string }) => void;
+  "table:requestState": (
+    args: { tableId: string },
+    cb?: (res: { ok: true } | { ok: false; error: string }) => void,
+  ) => void;
   "admin:kickPlayer": (
     args: { tableId: string; targetPlayerId: number },
     cb: (res: { ok: true } | { ok: false; error: string }) => void,
@@ -158,6 +162,18 @@ export interface ClientToServerEvents {
         | { ok: true; cleared: number; occupiedAfter: number }
         | { ok: false; error: string },
     ) => void,
+  ) => void;
+  "admin:addBot": (
+    args: { tableId: string; buyIn?: number },
+    cb: (
+      res:
+        | { ok: true; playerId: number; username: string }
+        | { ok: false; error: string },
+    ) => void,
+  ) => void;
+  "admin:removeBot": (
+    args: { tableId: string; targetPlayerId: number },
+    cb: (res: { ok: true; deferred: boolean } | { ok: false; error: string }) => void,
   ) => void;
   "table:action": (args: { tableId: string; action: PlayerAction }) => void;
   "table:chat": (args: { tableId: string; message: string }) => void;

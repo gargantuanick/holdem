@@ -4,10 +4,11 @@ import type {
   ClientToServerEvents,
   HandFinishedPayload,
   LobbyTableSummary,
+  PlayerAction,
   ServerToClientEvents,
   TableConfig,
 } from "@holdem/shared";
-import { Table } from "./table.js";
+import { Table, type TableSeat } from "./table.js";
 import {
   creditWallet,
   debitWallet,
@@ -27,6 +28,12 @@ import { computeStatsDeltas } from "./stats.js";
 export class Lobby {
   private tables = new Map<string, Table>();
   private io: Server<ClientToServerEvents, ServerToClientEvents>;
+  private nextBotPlayerId = -1;
+  private nextBotNumber = 1;
+  private botActionTimers = new Map<
+    string,
+    { key: string; timer: ReturnType<typeof setTimeout> }
+  >();
   /** Tracks which playerIds entered each table this session (for tables_joined++). */
   private joinedAt = new Map<string, Set<number>>();
   /**
@@ -106,7 +113,10 @@ export class Lobby {
     const id = randomUUID();
     const config: TableConfig = { id, ...args };
     const table = new Table(config, {
-      onStateChange: (t) => this.broadcastState(t),
+      onStateChange: (t) => {
+        this.broadcastState(t);
+        this.scheduleBotAction(t);
+      },
       onHandFinished: (t, payload) => this.handleHandFinished(t, payload),
       onActionTimeout: (t, seatIndex) => {
         const ts = t.seats[seatIndex];
@@ -134,6 +144,67 @@ export class Lobby {
 
   getTable(id: string): Table | null {
     return this.tables.get(id) ?? null;
+  }
+
+  isPlayerSeated(playerId: number): boolean {
+    for (const table of this.tables.values()) {
+      if (table.findSeatByPlayer(playerId)) return true;
+    }
+    return false;
+  }
+
+  isBotPlayer(playerId: number): boolean {
+    for (const table of this.tables.values()) {
+      const seat = table.findSeatByPlayer(playerId);
+      if (seat?.isBot) return true;
+    }
+    return false;
+  }
+
+  addBot(args: {
+    tableId: string;
+    buyIn?: number;
+  }): { playerId: number; username: string } {
+    const table = this.tables.get(args.tableId);
+    if (!table) throw new Error("table not found");
+    if (table.occupiedSeats().length >= table.config.maxSeats) {
+      throw new Error("table full");
+    }
+    const buyIn = args.buyIn ?? table.config.minBuyIn;
+    if (
+      !Number.isFinite(buyIn) ||
+      !Number.isInteger(buyIn) ||
+      buyIn < table.config.minBuyIn ||
+      buyIn > table.config.maxBuyIn
+    ) {
+      throw new Error("invalid bot buy-in");
+    }
+    const playerId = this.nextBotPlayerId--;
+    const username = `CPU ${this.nextBotNumber++}`;
+    table.sitDown({
+      playerId,
+      username,
+      buyIn,
+      isBot: true,
+    });
+    table.setReady(playerId, true);
+    if (table.canStartHand()) {
+      table.startHand();
+    }
+    return { playerId, username };
+  }
+
+  removeBot(args: {
+    tableId: string;
+    playerId: number;
+  }): { deferred: boolean } {
+    const table = this.tables.get(args.tableId);
+    if (!table) throw new Error("table not found");
+    const seat = table.findSeatByPlayer(args.playerId);
+    if (!seat) throw new Error("bot not at this table");
+    if (!seat.isBot) throw new Error("target is not a bot");
+    const result = table.standUp(args.playerId);
+    return { deferred: result.deferred };
   }
 
   /** Buy-in flow: debit wallet → sit player at table. Returns new wallet balance. */
@@ -234,36 +305,43 @@ export class Lobby {
   async adminForceClear(tableId: string): Promise<number[]> {
     const table = this.tables.get(tableId);
     if (!table) throw new Error("table not found");
+    this.clearBotActionTimer(tableId);
     const before = table.seats
       .filter((s) => s.playerId !== null)
-      .map((s) => `seat${s.seatIndex}:p${s.playerId}(${s.username},stack=${s.stack},conn=${s.isConnected})`);
+      .map((s) => `seat${s.seatIndex}:p${s.playerId}(${s.username},stack=${s.stack},committed=${s.totalCommitted},conn=${s.isConnected})`);
     console.log(
       `[adminForceClear] tableId=${tableId} occupiedBefore=${before.length} seats=[${before.join(" ")}]`,
     );
-    table.abortHand();
-    // Pass 1 — synchronous seat eviction.
-    const refunds: Array<{ playerId: number; stack: number }> = [];
+    // Pass 1 — snapshot refunds before abortHand clears committed chips.
+    const refunds: Array<{ playerId: number; amount: number }> = [];
     for (const seat of table.seats) {
       if (seat.playerId === null) continue;
       const playerId = seat.playerId;
       table.cancelDisconnectTimer(playerId);
-      const stack = table.removeSeat(seat);
-      refunds.push({ playerId, stack });
+      if (!seat.isBot) {
+        refunds.push({ playerId, amount: seat.stack + seat.totalCommitted });
+      }
     }
-    // Pass 2 — credit wallets in parallel. Each goes through the retry
+    table.abortHand();
+    // Pass 2 — synchronous seat eviction.
+    for (const seat of table.seats) {
+      if (seat.playerId === null) continue;
+      table.removeSeat(seat);
+    }
+    // Pass 3 — credit wallets in parallel. Each goes through the retry
     // helper; a final terminal failure logs CRITICAL but doesn't reject
     // the parallel batch (admin still wants the table cleared even if one
     // wallet write keeps failing — the alternative is a half-cleared
     // table).
     await Promise.all(
       refunds
-        .filter((r) => r.stack > 0)
+        .filter((r) => r.amount > 0)
         .map(async (r) => {
           try {
-            await creditWithRetry(r.playerId, r.stack);
+            await creditWithRetry(r.playerId, r.amount);
           } catch (err) {
             console.error(
-              `[lobby] adminForceClear: CRITICAL chip loss for player ${r.playerId} stack=${r.stack}:`,
+              `[lobby] adminForceClear: CRITICAL chip loss for player ${r.playerId} amount=${r.amount}:`,
               err,
             );
           }
@@ -271,6 +349,58 @@ export class Lobby {
     );
     invalidateLeaderboardCache();
     return refunds.map((r) => r.playerId);
+  }
+
+  /**
+   * Gracefully cash out every in-memory seat. This is used during local/dev
+   * restarts so buy-ins are not stranded when tables disappear from memory.
+   */
+  async cashOutAll(
+    reason = "Server restarted",
+  ): Promise<{ players: number; chips: number }> {
+    const refunds: Array<{ tableId: string; playerId: number; amount: number }> = [];
+    for (const table of this.tables.values()) {
+      this.clearBotActionTimer(table.config.id);
+      for (const seat of table.seats) {
+        if (seat.playerId === null) continue;
+        table.cancelDisconnectTimer(seat.playerId);
+        if (!seat.isBot) {
+          refunds.push({
+            tableId: table.config.id,
+            playerId: seat.playerId,
+            amount: seat.stack + seat.totalCommitted,
+          });
+        }
+      }
+      if (table.occupiedSeats().length > 0) {
+        table.abortHand();
+        for (const seat of table.seats) {
+          if (seat.playerId !== null) table.removeSeat(seat);
+        }
+        this.io.to(table.config.id).emit("table:evicted", {
+          tableId: table.config.id,
+          reason,
+        });
+      }
+    }
+
+    const chips = refunds.reduce((sum, r) => sum + r.amount, 0);
+    await Promise.all(
+      refunds
+        .filter((r) => r.amount > 0)
+        .map(async (r) => {
+          try {
+            await creditWithRetry(r.playerId, r.amount);
+          } catch (err) {
+            console.error(
+              `[lobby] cashOutAll: CRITICAL chip loss for player ${r.playerId} table=${r.tableId} amount=${r.amount}:`,
+              err,
+            );
+          }
+        }),
+    );
+    if (refunds.length > 0) invalidateLeaderboardCache();
+    return { players: refunds.length, chips };
   }
 
   async rebuy(args: {
@@ -316,6 +446,61 @@ export class Lobby {
         (sock.data as { playerId?: number | null }).playerId ?? null;
       sock.emit("table:state", table.publicState(playerId));
     }
+  }
+
+  private scheduleBotAction(table: Table): void {
+    const tableId = table.config.id;
+    const toAct = table.engine?.toActSeatIndex ?? null;
+    if (toAct === null) {
+      this.clearBotActionTimer(tableId);
+      return;
+    }
+    const seat = table.seats[toAct];
+    if (!seat?.isBot || seat.playerId === null) {
+      this.clearBotActionTimer(tableId);
+      return;
+    }
+    const key = [
+      table.handNumber,
+      table.engine?.street,
+      toAct,
+      table.engine?.currentBet,
+      seat.betThisStreet,
+      seat.stack,
+    ].join(":");
+    const existing = this.botActionTimers.get(tableId);
+    if (existing?.key === key) return;
+    this.clearBotActionTimer(tableId);
+    const timer = setTimeout(() => {
+      this.botActionTimers.delete(tableId);
+      const liveTable = this.tables.get(tableId);
+      if (!liveTable?.engine) return;
+      const liveToAct = liveTable.engine.toActSeatIndex;
+      if (liveToAct === null) return;
+      const liveSeat = liveTable.seats[liveToAct];
+      if (!liveSeat?.isBot || liveSeat.playerId === null) return;
+      try {
+        liveTable.applyAction(
+          liveSeat.playerId,
+          chooseBotAction(liveTable, liveSeat),
+        );
+      } catch (err) {
+        console.error("[bot] action failed:", err);
+        try {
+          liveTable.applyAction(liveSeat.playerId, { type: "fold" });
+        } catch {
+          // The table's action timer remains active as a final fallback.
+        }
+      }
+    }, 600 + Math.floor(Math.random() * 700));
+    this.botActionTimers.set(tableId, { key, timer });
+  }
+
+  private clearBotActionTimer(tableId: string): void {
+    const existing = this.botActionTimers.get(tableId);
+    if (!existing) return;
+    clearTimeout(existing.timer);
+    this.botActionTimers.delete(tableId);
   }
 
   private async handleHandFinished(
@@ -367,7 +552,9 @@ export class Lobby {
     for (const seat of table.seats) {
       if (!seat.pendingLeave || seat.playerId === null) continue;
       const playerId = seat.playerId;
+      const isBot = seat.isBot;
       const stack = table.removeSeat(seat);
+      if (isBot) continue;
       if (stack > 0) {
         try {
           const newWallet = await creditWithRetry(playerId, stack);
@@ -461,4 +648,20 @@ async function creditWithRetry(playerId: number, amount: number): Promise<number
     }
   }
   throw lastErr ?? new Error("creditWithRetry exhausted");
+}
+
+function chooseBotAction(table: Table, seat: TableSeat): PlayerAction {
+  const currentBet = table.engine?.currentBet ?? 0;
+  const toCall = Math.max(0, currentBet - seat.betThisStreet);
+  if (toCall <= 0) {
+    return { type: "check" };
+  }
+
+  const cheapByBlind = toCall <= table.config.bigBlind * 2;
+  const cheapByStack = toCall <= Math.max(1, Math.floor(seat.stack * 0.2));
+  if (cheapByBlind || cheapByStack) {
+    return { type: "call" };
+  }
+
+  return Math.random() < 0.2 ? { type: "call" } : { type: "fold" };
 }

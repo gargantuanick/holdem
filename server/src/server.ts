@@ -14,7 +14,18 @@ import { registerApiRoutes } from "./api/index.js";
 import { Lobby } from "./rooms/lobby.js";
 
 const PORT = Number(process.env.PORT ?? 3001);
-const CLIENT_ORIGIN = process.env.CLIENT_ORIGIN ?? "http://localhost:5173";
+const CLIENT_ORIGINS = (
+  process.env.CLIENT_ORIGIN ??
+  "http://localhost:5173,http://127.0.0.1:5173"
+)
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+function isAllowedOrigin(origin: string | undefined): boolean {
+  if (!origin) return true;
+  return CLIENT_ORIGINS.includes(origin);
+}
 
 async function main() {
   // Run migrations before accepting traffic.
@@ -35,7 +46,7 @@ async function main() {
   const app = express();
   app.use(
     cors({
-      origin: CLIENT_ORIGIN,
+      origin: (origin, cb) => cb(null, isAllowedOrigin(origin)),
       credentials: true,
     }),
   );
@@ -45,19 +56,18 @@ async function main() {
     res.status(200).json({ ok: true, time: new Date().toISOString() });
   });
 
-  registerApiRoutes(app);
-
   const server = http.createServer(app);
   const io = new Server<ClientToServerEvents, ServerToClientEvents>(server, {
-    cors: { origin: CLIENT_ORIGIN, credentials: true },
+    cors: { origin: CLIENT_ORIGINS, credentials: true },
   });
 
   const lobby = new Lobby(io);
+  registerApiRoutes(app, lobby, io);
   registerSocketHandlers(io, lobby);
 
   server.listen(PORT, () => {
     console.log(`[server] listening on :${PORT}`);
-    console.log(`[server] CORS origin: ${CLIENT_ORIGIN}`);
+    console.log(`[server] CORS origins: ${CLIENT_ORIGINS.join(",")}`);
     if (process.env.DATABASE_URL) {
       // touch the pool early so connection issues surface fast
       getSql()`SELECT 1`.catch((e) => {
@@ -68,6 +78,15 @@ async function main() {
 
   const shutdown = async () => {
     console.log("[server] shutting down");
+    const refunded = await lobby.cashOutAll("Server restarted").catch((err) => {
+      console.error("[server] graceful cash-out failed:", err);
+      return { players: 0, chips: 0 };
+    });
+    if (refunded.players > 0) {
+      console.log(
+        `[server] graceful cash-out refunded ${refunded.chips} chips to ${refunded.players} players`,
+      );
+    }
     io.close();
     server.close();
     await closePool().catch(() => {});

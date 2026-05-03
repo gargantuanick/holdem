@@ -153,6 +153,70 @@ describe("buyIn validation", () => {
   });
 });
 
+describe("bot seats", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(players.creditWallet).mockResolvedValue(0);
+    vi.mocked(players.debitWallet).mockResolvedValue(0);
+  });
+
+  it("adds and removes bots without touching player wallets", () => {
+    const lobby = newLobby();
+    const [summary] = lobby.listTables();
+    const tableId = summary!.id;
+
+    const bot = lobby.addBot({ tableId });
+    const table = lobby.getTable(tableId)!;
+
+    expect(table.findSeatByPlayer(bot.playerId)?.isBot).toBe(true);
+    expect(table.findSeatByPlayer(bot.playerId)?.ready).toBe(true);
+
+    const removed = lobby.removeBot({ tableId, playerId: bot.playerId });
+
+    expect(removed.deferred).toBe(false);
+    expect(table.findSeatByPlayer(bot.playerId)).toBeNull();
+    expect(vi.mocked(players.debitWallet)).not.toHaveBeenCalled();
+    expect(vi.mocked(players.creditWallet)).not.toHaveBeenCalled();
+  });
+
+  it("does not start bot-only hands", () => {
+    const lobby = newLobby();
+    const table = lobby.createTable({
+      ...baseArgs,
+      name: "CPU Test",
+      maxSeats: 2,
+    });
+
+    lobby.addBot({ tableId: table.config.id, buyIn: 50 });
+    lobby.addBot({ tableId: table.config.id, buyIn: 50 });
+
+    expect(table.engine).toBeNull();
+    expect(table.canStartHand()).toBe(false);
+    expect(() => table.startHand()).toThrow(/real player/);
+  });
+
+  it("admin cleanup refunds human seats but skips bot seats", async () => {
+    const lobby = newLobby();
+    const [summary] = lobby.listTables();
+    const tableId = summary!.id;
+
+    vi.mocked(players.debitWallet).mockResolvedValue(9_800);
+    await lobby.buyIn({ tableId, playerId: 1, username: "a", buyIn: 200 });
+    const bot = lobby.addBot({ tableId });
+    const table = lobby.getTable(tableId)!;
+    table.setReady(1, true);
+    table.startHand();
+
+    vi.mocked(players.creditWallet).mockResolvedValue(10_000);
+    const cleared = await lobby.adminForceClear(tableId);
+
+    expect(cleared).toEqual([1]);
+    expect(table.findSeatByPlayer(bot.playerId)).toBeNull();
+    expect(vi.mocked(players.creditWallet)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(players.creditWallet)).toHaveBeenCalledWith(1, 200);
+  });
+});
+
 // =========================================================================
 // Fix #3 — chip-loss-on-credit-failure regression coverage
 // =========================================================================
@@ -208,5 +272,49 @@ describe("cashOut credit retry [post-fix]", () => {
     ).rejects.toThrow(/DB down/);
     // 5 retries.
     expect(vi.mocked(players.creditWallet)).toHaveBeenCalledTimes(5);
+  });
+});
+
+describe("forced table cleanup refunds committed chips", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(players.creditWallet).mockResolvedValue(0);
+    vi.mocked(players.debitWallet).mockResolvedValue(0);
+  });
+
+  async function seatTwoReadyPlayers() {
+    const lobby = newLobby();
+    const [summary] = lobby.listTables();
+    const tableId = summary!.id;
+    vi.mocked(players.debitWallet).mockResolvedValue(9_800);
+    await lobby.buyIn({ tableId, playerId: 1, username: "a", buyIn: 200 });
+    await lobby.buyIn({ tableId, playerId: 2, username: "b", buyIn: 200 });
+    const table = lobby.getTable(tableId)!;
+    table.setReady(1, true);
+    table.setReady(2, true);
+    table.startHand();
+    return { lobby, tableId };
+  }
+
+  it("cashOutAll refunds stack plus committed blind chips on shutdown", async () => {
+    const { lobby } = await seatTwoReadyPlayers();
+    vi.mocked(players.creditWallet).mockResolvedValue(10_000);
+
+    const result = await lobby.cashOutAll();
+
+    expect(result).toEqual({ players: 2, chips: 400 });
+    expect(vi.mocked(players.creditWallet)).toHaveBeenCalledWith(1, 200);
+    expect(vi.mocked(players.creditWallet)).toHaveBeenCalledWith(2, 200);
+  });
+
+  it("adminForceClear refunds stack plus committed blind chips", async () => {
+    const { lobby, tableId } = await seatTwoReadyPlayers();
+    vi.mocked(players.creditWallet).mockResolvedValue(10_000);
+
+    const cleared = await lobby.adminForceClear(tableId);
+
+    expect(cleared.sort()).toEqual([1, 2]);
+    expect(vi.mocked(players.creditWallet)).toHaveBeenCalledWith(1, 200);
+    expect(vi.mocked(players.creditWallet)).toHaveBeenCalledWith(2, 200);
   });
 });

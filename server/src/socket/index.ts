@@ -306,9 +306,12 @@ export function registerSocketHandlers(
       }
     });
 
-    sock.on("table:requestState", ({ tableId }) => {
+    sock.on("table:requestState", ({ tableId }, cb) => {
       const table = lobby.getTable(tableId);
-      if (!table) return;
+      if (!table) {
+        cb?.({ ok: false, error: "table not found" });
+        return;
+      }
       // Ensure the requester is in the socket.io room. Without this, a
       // tab takeover (Tab B logs in as same username → Tab A kicked) sees
       // the snapshot once but never receives push broadcasts because only
@@ -321,6 +324,7 @@ export function registerSocketHandlers(
         sock.join(tableId);
       }
       sock.emit("table:state", table.publicState(sock.data.playerId));
+      cb?.({ ok: true });
     });
 
     sock.on("table:sitOut", ({ tableId, sittingOut }) => {
@@ -419,12 +423,42 @@ export function registerSocketHandlers(
         return;
       }
       try {
-        await lobby.cashOut({ tableId, playerId: targetPlayerId });
-        const targetSid = activeSocketByPlayer.get(targetPlayerId);
-        if (targetSid) {
-          io.to(targetSid).emit("error", "Kicked from table by admin");
+        if (lobby.isBotPlayer(targetPlayerId)) {
+          lobby.removeBot({ tableId, playerId: targetPlayerId });
+        } else {
+          await lobby.cashOut({ tableId, playerId: targetPlayerId });
+          const targetSid = activeSocketByPlayer.get(targetPlayerId);
+          if (targetSid) {
+            io.to(targetSid).emit("error", "Kicked from table by admin");
+          }
         }
         cb({ ok: true });
+      } catch (err) {
+        cb({ ok: false, error: errorMessage(err) });
+      }
+    });
+
+    sock.on("admin:addBot", ({ tableId, buyIn }, cb) => {
+      if (!isAdmin(sock.data.username)) {
+        cb({ ok: false, error: "not authorized" });
+        return;
+      }
+      try {
+        const bot = lobby.addBot({ tableId, buyIn });
+        cb({ ok: true, ...bot });
+      } catch (err) {
+        cb({ ok: false, error: errorMessage(err) });
+      }
+    });
+
+    sock.on("admin:removeBot", ({ tableId, targetPlayerId }, cb) => {
+      if (!isAdmin(sock.data.username)) {
+        cb({ ok: false, error: "not authorized" });
+        return;
+      }
+      try {
+        const result = lobby.removeBot({ tableId, playerId: targetPlayerId });
+        cb({ ok: true, deferred: result.deferred });
       } catch (err) {
         cb({ ok: false, error: errorMessage(err) });
       }

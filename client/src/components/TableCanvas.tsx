@@ -91,7 +91,7 @@ export function TableCanvas({
               winner={winner}
               revealedCards={revealed}
               onClickName={
-                seat.username
+                seat.username && !seat.isBot
                   ? () => onProfileClick?.(seat.username!)
                   : undefined
               }

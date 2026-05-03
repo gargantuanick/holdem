@@ -23,6 +23,7 @@ export function computeStatsDeltas(
   // Walk seats that were in this hand.
   for (const seat of table.seats) {
     if (!seat.inCurrentHand || seat.playerId === null) continue;
+    if (seat.isBot) continue;
     const playerId = seat.playerId;
     const winsByThisPlayer = payload.winners.filter(
       (w) => w.playerId === playerId,

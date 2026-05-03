@@ -26,6 +26,39 @@ export interface RecordHandResultArgs {
   perPlayer: HandStatsDelta[];
 }
 
+function normalizeWinners(value: unknown): HandWinnerRecord[] {
+  let parsed: unknown;
+  try {
+    parsed =
+      typeof value === "string"
+        ? (JSON.parse(value) as unknown)
+        : value;
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(parsed)) return [];
+  return parsed
+    .map((winner) => {
+      if (!winner || typeof winner !== "object") return null;
+      const w = winner as Partial<HandWinnerRecord>;
+      if (
+        typeof w.playerId !== "number" ||
+        typeof w.username !== "string" ||
+        typeof w.amount !== "number" ||
+        typeof w.handDescription !== "string"
+      ) {
+        return null;
+      }
+      return {
+        playerId: w.playerId,
+        username: w.username,
+        amount: w.amount,
+        handDescription: w.handDescription,
+      };
+    })
+    .filter((winner): winner is HandWinnerRecord => winner !== null);
+}
+
 /**
  * Single transaction:
  *  - insert hand_history row
@@ -71,7 +104,7 @@ export async function fetchHandHistory(
   const sql = getSql();
   const rows = await sql<{
     hand_number: string;
-    winners: HandWinnerRecord[];
+    winners: unknown;
     pot_total: string;
     community_cards: string | null;
     ended_at: Date;
@@ -84,7 +117,7 @@ export async function fetchHandHistory(
   `;
   return rows.map((r) => ({
     handNumber: Number(r.hand_number),
-    winners: r.winners,
+    winners: normalizeWinners(r.winners),
     potTotal: Number(r.pot_total),
     communityCards: r.community_cards ?? "",
     endedAt: r.ended_at.toISOString(),

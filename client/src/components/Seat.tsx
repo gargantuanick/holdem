@@ -83,13 +83,26 @@ export function Seat({
           </>
         ) : null}
       </div>
-      <button
-        type="button"
-        onClick={onClickName}
-        className="text-xs font-semibold truncate max-w-[100px] hover:underline"
-      >
-        {seat.username}
-      </button>
+      <div className="flex items-center justify-center gap-1 max-w-[112px]">
+        {onClickName ? (
+          <button
+            type="button"
+            onClick={onClickName}
+            className="min-w-0 text-xs font-semibold truncate hover:underline"
+          >
+            {seat.username}
+          </button>
+        ) : (
+          <div className="min-w-0 text-xs font-semibold truncate">
+            {seat.username}
+          </div>
+        )}
+        {seat.isBot && (
+          <span className="shrink-0 rounded bg-sky-400/20 px-1 py-px text-[9px] font-bold uppercase tracking-wide text-sky-100">
+            CPU
+          </span>
+        )}
+      </div>
       <StackDisplay stack={seat.stack} prominent={isLocal} />
       {seat.betThisStreet > 0 && (
         <div className="absolute -bottom-3">

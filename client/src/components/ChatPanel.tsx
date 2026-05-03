@@ -35,6 +35,7 @@ export function ChatPanel({
           <button
             onClick={onClose}
             className="text-white/60 hover:text-white px-2"
+            aria-label="close"
           >
             ×
           </button>

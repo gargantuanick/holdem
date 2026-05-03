@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { getSocket } from "../lib/socket";
 import { useGameState } from "../hooks/useGameState";
@@ -34,6 +34,11 @@ export function TablePage() {
   const [unseenChat, setUnseenChat] = useState(0);
   const [rebuyOpen, setRebuyOpen] = useState(false);
   const [showCardsHand, setShowCardsHand] = useState<number | null>(null);
+  const [botBusy, setBotBusy] = useState(false);
+  const [botFeedback, setBotFeedback] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const notFoundTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const previousChatLength = useRef(chat.length);
   const [_tick, setTick] = useState(0);
 
   // Force re-render once per second so the timer bar visibly progresses.
@@ -50,13 +55,25 @@ export function TablePage() {
   useEffect(() => {
     if (!tableId) return;
     const sock = getSocket();
-    const ask = () => sock.emit("table:requestState", { tableId });
+    setLoadError(null);
+    const ask = () =>
+      sock.emit("table:requestState", { tableId }, (res) => {
+        if (!res.ok) {
+          setLoadError(res.error);
+          if (notFoundTimer.current) clearTimeout(notFoundTimer.current);
+          notFoundTimer.current = setTimeout(
+            () => navigate("/lobby", { replace: true }),
+            1_200,
+          );
+        }
+      });
     ask();
     sock.on("connect", ask);
     return () => {
+      if (notFoundTimer.current) clearTimeout(notFoundTimer.current);
       sock.off("connect", ask);
     };
-  }, [tableId]);
+  }, [tableId, navigate]);
 
   // If the server kicks me from this table (admin clear, future kick), the
   // table:evicted event tells the client to navigate back to the lobby
@@ -95,9 +112,11 @@ export function TablePage() {
 
   // Track unseen chat
   useEffect(() => {
-    if (!chatOpen && chat.length > 0) {
-      setUnseenChat((n) => n + 1);
+    const previous = previousChatLength.current;
+    if (!chatOpen && chat.length > previous) {
+      setUnseenChat((n) => n + chat.length - previous);
     }
+    previousChatLength.current = chat.length;
   }, [chat.length, chatOpen]);
   useEffect(() => {
     if (chatOpen) setUnseenChat(0);
@@ -105,6 +124,11 @@ export function TablePage() {
   useEffect(() => {
     setShowCardsHand(null);
   }, [state?.handNumber, localPlayerId]);
+  useEffect(() => {
+    if (!botFeedback) return;
+    const id = setTimeout(() => setBotFeedback(null), 3000);
+    return () => clearTimeout(id);
+  }, [botFeedback]);
 
   const leave = useCallback(() => {
     if (!tableId) return;
@@ -146,6 +170,47 @@ export function TablePage() {
   const canShowCards =
     !!state && !!mySeat?.hasCards && state.street !== "idle";
   const showCardsArmed = showCardsHand === state?.handNumber;
+  const isAdmin = profile?.username === "nk";
+  const botSeats = state?.seats.filter((s) => s.isBot && s.playerId !== null) ?? [];
+  const hasOpenSeat = state?.seats.some((s) => s.playerId === null) ?? false;
+
+  const addBot = () => {
+    if (!tableId || !state) return;
+    setBotBusy(true);
+    setBotFeedback(null);
+    getSocket().emit(
+      "admin:addBot",
+      { tableId, buyIn: state.config.minBuyIn },
+      (res) => {
+        setBotBusy(false);
+        if (!res.ok) {
+          setBotFeedback(res.error);
+          return;
+        }
+        setBotFeedback(`${res.username} joined`);
+      },
+    );
+  };
+
+  const removeBot = () => {
+    if (!tableId) return;
+    const target = botSeats.at(-1);
+    if (!target?.playerId) return;
+    setBotBusy(true);
+    setBotFeedback(null);
+    getSocket().emit(
+      "admin:removeBot",
+      { tableId, targetPlayerId: target.playerId },
+      (res) => {
+        setBotBusy(false);
+        if (!res.ok) {
+          setBotFeedback(res.error);
+          return;
+        }
+        setBotFeedback(res.deferred ? "CPU leaves after hand" : "CPU removed");
+      },
+    );
+  };
 
   return (
     <div className="h-dvh w-full bg-felt-900 text-white safe-top flex flex-col overflow-hidden">
@@ -216,7 +281,9 @@ export function TablePage() {
               onProfileClick={(u) => setProfileOf(u)}
             />
           ) : (
-            <div className="text-white/60 text-center">Loading table…</div>
+            <div className="text-white/60 text-center">
+              {loadError ? "Table not found. Returning to lobby…" : "Loading table…"}
+            </div>
           )}
           {!connected && (
             <div className="absolute top-2 right-2 left-2 sm:left-auto sm:max-w-xs bg-amber-600/90 text-white text-sm px-3 py-2 rounded-md">
@@ -255,7 +322,7 @@ export function TablePage() {
         <div className="shrink-0 px-3 py-1.5 flex items-center justify-between text-xs">
           {mySeat && (
             <>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <button
                   onClick={() => sitOut(!mySeat.sittingOut)}
                   className="px-2 py-1 rounded-md bg-white/8 hover:bg-white/12"
@@ -282,6 +349,29 @@ export function TablePage() {
                   >
                     Rebuy
                   </button>
+                )}
+                {isAdmin && state && (
+                  <div className="flex items-center gap-1 pl-1 border-l border-white/10">
+                    <button
+                      onClick={addBot}
+                      disabled={botBusy || !hasOpenSeat}
+                      className="px-2 py-1 rounded-md bg-emerald-600/80 hover:bg-emerald-600 disabled:opacity-40 disabled:hover:bg-emerald-600/80"
+                    >
+                      Add CPU
+                    </button>
+                    <button
+                      onClick={removeBot}
+                      disabled={botBusy || botSeats.length === 0}
+                      className="px-2 py-1 rounded-md bg-white/8 hover:bg-white/12 disabled:opacity-40"
+                    >
+                      Remove CPU
+                    </button>
+                    {botFeedback && (
+                      <span className="text-[10px] text-white/55 max-w-[110px] truncate">
+                        {botFeedback}
+                      </span>
+                    )}
+                  </div>
                 )}
               </div>
               <div className="text-white/50 font-mono">

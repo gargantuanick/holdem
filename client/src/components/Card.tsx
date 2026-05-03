@@ -35,6 +35,12 @@ export function PlayingCard({
     lg: "w-12 h-[4.25rem] text-lg sm:w-16 sm:h-[5.75rem] sm:text-2xl",
     xl: "w-14 h-20 text-xl sm:w-20 sm:h-28 sm:text-3xl",
   };
+  const suitSizes = {
+    sm: "text-2xl sm:text-3xl",
+    md: "text-3xl sm:text-4xl",
+    lg: "text-4xl sm:text-6xl",
+    xl: "text-5xl sm:text-7xl",
+  };
   if (faceDown || !card) {
     return (
       <div
@@ -49,18 +55,19 @@ export function PlayingCard({
   const suit = card[1] as keyof typeof SUIT_GLYPH;
   return (
     <div
-      className={`${sizes[size]} relative rounded-md bg-white shadow-md border border-black/20 flex flex-col items-center justify-between p-1 animate-card-deal ${glow ? "ring-2 ring-chip-gold" : ""}`}
+      className={`${sizes[size]} relative rounded-md bg-white shadow-md border border-black/20 overflow-hidden animate-card-deal ${glow ? "ring-2 ring-chip-gold" : ""}`}
     >
-      <div className={`leading-none font-bold self-start ${SUIT_COLOR[suit]}`}>
-        {rank}
-      </div>
-      <div className={`leading-none ${SUIT_COLOR[suit]} text-2xl`}>
-        {SUIT_GLYPH[suit]}
+      <div
+        className={`absolute left-1 top-1 leading-none font-bold ${SUIT_COLOR[suit]}`}
+      >
+        <div>{rank}</div>
+        <div className="mt-0.5 text-[0.65em]">{SUIT_GLYPH[suit]}</div>
       </div>
       <div
-        className={`leading-none font-bold self-end rotate-180 ${SUIT_COLOR[suit]}`}
+        className={`absolute inset-x-0 bottom-[8%] text-center leading-none ${SUIT_COLOR[suit]} ${suitSizes[size]}`}
+        aria-hidden="true"
       >
-        {rank}
+        {SUIT_GLYPH[suit]}
       </div>
     </div>
   );

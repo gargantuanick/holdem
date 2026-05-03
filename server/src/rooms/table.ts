@@ -31,6 +31,7 @@ export interface TableSeat {
   stack: number;
   sittingOut: boolean;
   isConnected: boolean;
+  isBot: boolean;
   // tracking for current hand
   inCurrentHand: boolean;
   betThisStreet: number;
@@ -92,6 +93,7 @@ export class Table {
       stack: 0,
       sittingOut: false,
       isConnected: true,
+      isBot: false,
       inCurrentHand: false,
       betThisStreet: 0,
       totalCommitted: 0,
@@ -123,6 +125,7 @@ export class Table {
     username: string;
     buyIn: number;
     seatIndex?: number;
+    isBot?: boolean;
   }): TableSeat {
     if (this.findSeatByPlayer(args.playerId)) {
       throw new Error("already seated at this table");
@@ -147,6 +150,7 @@ export class Table {
     seat.stack = args.buyIn;
     seat.sittingOut = false;
     seat.isConnected = true;
+    seat.isBot = !!args.isBot;
     seat.pendingLeave = false;
     this.events.onStateChange(this);
     return seat;
@@ -213,6 +217,7 @@ export class Table {
     seat.pendingLeave = false;
     seat.pendingSitOut = false;
     seat.isConnected = true;
+    seat.isBot = false;
     seat.ready = false;
     seat.canStillRaise = true;
     seat.lastAction = null;
@@ -295,7 +300,7 @@ export class Table {
         s.ready &&
         s.stack >= this.config.bigBlind,
     );
-    return eligible.length >= 2;
+    return eligible.length >= 2 && eligible.some((s) => !s.isBot);
   }
 
   startHand(): void {
@@ -308,6 +313,9 @@ export class Table {
         s.stack >= this.config.bigBlind,
     );
     if (eligible.length < 2) throw new Error("not enough players");
+    if (!eligible.some((s) => !s.isBot)) {
+      throw new Error("at least one real player is required");
+    }
 
     this.handNumber++;
     // Choose dealer: rotate clockwise from the previous dealer's seat
@@ -620,6 +628,7 @@ export class Table {
         isAllIn: s.isAllIn,
         sittingOut: s.sittingOut,
         isConnected: s.isConnected,
+        isBot: s.isBot,
         ready: s.ready,
         canStillRaise: s.canStillRaise,
         lastAction: s.lastAction,

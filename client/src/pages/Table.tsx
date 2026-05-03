@@ -125,6 +125,11 @@ export function TablePage() {
     setShowCardsHand(null);
   }, [state?.handNumber, localPlayerId]);
   useEffect(() => {
+    if (!state || !localPlayerId || mySeat) return;
+    const id = setTimeout(() => navigate("/lobby", { replace: true }), 1_200);
+    return () => clearTimeout(id);
+  }, [state, localPlayerId, mySeat, navigate]);
+  useEffect(() => {
     if (!botFeedback) return;
     const id = setTimeout(() => setBotFeedback(null), 3000);
     return () => clearTimeout(id);
@@ -132,10 +137,14 @@ export function TablePage() {
 
   const leave = useCallback(() => {
     if (!tableId) return;
+    if (!mySeat) {
+      navigate("/lobby");
+      return;
+    }
     getSocket().emit("table:leave", { tableId }, () => {
       navigate("/lobby");
     });
-  }, [tableId, navigate]);
+  }, [tableId, mySeat, navigate]);
 
   if (!tableId) {
     return <div className="p-6 text-white">No table id</div>;

@@ -3,6 +3,27 @@
 This file is the contract for any Claude session working in this repo
 (`gargantuanick/holdem`). It applies to **this repo only**.
 
+## ⚠️ Deploy reminder (do not skip)
+
+Railway's GitHub auto-deploy is broken on this repo, so the server
+**will not update from `git push` alone**. Whenever a session ends
+having touched `server/` or `shared/`, the assistant MUST end its
+final response with this block, verbatim:
+
+> 🚀 **Deploy required** — `server/` or `shared/` was modified.
+> From a normal terminal (not Cowork — needs interactive Railway auth):
+>
+> ```
+> cd server && railway up
+> ```
+>
+> Until this command runs, the new code is on `main` but not live.
+
+Skip the block only when the diff is purely under `client/` (Netlify
+auto-deploys those). When in doubt, surface the block — a redundant
+reminder is harmless; a missed deploy means the user thinks they've
+shipped when they haven't.
+
 ## After a meaningful change
 
 When finishing a meaningful change to source files:

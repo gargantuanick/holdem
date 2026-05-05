@@ -408,6 +408,26 @@ export function registerSocketHandlers(
       }
     });
 
+    sock.on("table:dealNow", ({ tableId }, cb) => {
+      const ack = cb ?? (() => {});
+      if (!sock.data.playerId) {
+        ack({ ok: false, error: "not authenticated" });
+        return;
+      }
+      const table = lobby.getTable(tableId);
+      if (!table) {
+        ack({ ok: false, error: "table not found" });
+        return;
+      }
+      // Anyone seated at the table can fast-forward — first press wins.
+      if (!table.findSeatByPlayer(sock.data.playerId)) {
+        ack({ ok: false, error: "not seated at this table" });
+        return;
+      }
+      const dealt = table.dealNextHandNow();
+      ack(dealt ? { ok: true } : { ok: false, error: "no hand pending" });
+    });
+
     sock.on("admin:kickPlayer", async ({ tableId, targetPlayerId }, cb) => {
       if (!isAdmin(sock.data.username)) {
         cb({ ok: false, error: "not authorized" });

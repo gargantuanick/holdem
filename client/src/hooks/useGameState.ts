@@ -53,7 +53,11 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     const onHist = (h: HandHistoryEntry[]) => setHistory(h);
     const onFinish = (p: HandFinishedPayload) => {
       setLastHand(p);
-      setTimeout(() => setLastHand((cur) => (cur === p ? null : cur)), 6000);
+      // Safety net only — the overlay is normally dismissed when the next
+      // hand's state arrives (handNumber check in Table). 12s outlives the
+      // server's 8s auto-start and covers the "no next hand" case (everyone
+      // busted, table heads-down).
+      setTimeout(() => setLastHand((cur) => (cur === p ? null : cur)), 12000);
     };
     const onErr = (msg: string) => {
       setErrorBanner(msg);

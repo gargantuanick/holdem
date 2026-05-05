@@ -162,6 +162,10 @@ export function TablePage() {
     getSocket().emit("table:showCards", { tableId });
     setShowCardsHand(state.handNumber);
   };
+  const dealNow = () => {
+    if (!tableId) return;
+    getSocket().emit("table:dealNow", { tableId });
+  };
 
   // Start gate: shown to any seated player who isn't currently in a hand.
   // Hides once you're dealt in — BettingControls takes over from there.
@@ -305,7 +309,12 @@ export function TablePage() {
             </div>
           )}
           {lastHand && state && lastHand.handNumber === state.handNumber && (
-            <ShowdownOverlay payload={lastHand} />
+            <ShowdownOverlay
+              payload={lastHand}
+              nextHandStartsAt={state.nextHandStartsAt}
+              onDealNow={dealNow}
+              canDealNow={!!mySeat}
+            />
           )}
         </div>
 

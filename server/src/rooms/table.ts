@@ -76,6 +76,8 @@ export class Table {
   lastHand: HandFinishedPayload | null = null;
   /** Auto-start the next hand after a finished one when 2+ seats remain seated. */
   private nextHandTimer: NodeJS.Timeout | null = null;
+  /** Epoch ms the auto-start fires at; mirrored to clients for the countdown. */
+  nextHandStartsAt: number | null = null;
   private actionTimer: NodeJS.Timeout | null = null;
   /** Disconnect grace timers per playerId; if not back in time, auto-fold + stand up. */
   private disconnectTimers = new Map<number, NodeJS.Timeout>();
@@ -182,6 +184,7 @@ export class Table {
       clearTimeout(this.nextHandTimer);
       this.nextHandTimer = null;
     }
+    this.nextHandStartsAt = null;
     this.engine = null;
     this.actionDeadline = null;
     for (const s of this.seats) {
@@ -316,6 +319,7 @@ export class Table {
     if (!eligible.some((s) => !s.isBot)) {
       throw new Error("at least one real player is required");
     }
+    this.nextHandStartsAt = null;
 
     this.handNumber++;
     // Choose dealer: rotate clockwise from the previous dealer's seat
@@ -473,25 +477,24 @@ export class Table {
     const eng = this.engine;
 
     // Build the showdown payload: which players showed which cards.
+    // At a real showdown (river dealt) every non-folded player is revealed
+    // for casual UX — "who won?" should be obvious at a glance, even at the
+    // cost of a couple folks mucking. For fold-out wins we still honor the
+    // "Show cards" opt-in so a player can flex a bluff.
     const shownHands: HandFinishedPayload["shownHands"] = [];
-    if (eng.community.length === 5) {
-      // showdown: anyone who didn't fold and has cards may be shown (auto-show
-      // for winners; losers can choose). For now: auto-show winners' cards;
-      // mucked otherwise unless `showCardsAtShowdown` was set.
-      const winnerSeats = new Set(eng.pendingWinners.map((w) => w.seatIndex));
-      for (const eseat of eng.seats) {
-        if (eseat.hasFolded) continue;
-        const ts = this.seats[eseat.seatIndex];
-        if (!ts || !ts.username) continue;
-        if (winnerSeats.has(eseat.seatIndex) || ts.showCardsAtShowdown) {
-          shownHands.push({
-            seatIndex: eseat.seatIndex,
-            playerId: eseat.playerId,
-            username: ts.username,
-            cards: eseat.holeCards,
-            handDescription: this.descrFor(eseat.seatIndex),
-          });
-        }
+    const reachedShowdown = eng.community.length === 5;
+    for (const eseat of eng.seats) {
+      if (eseat.hasFolded) continue;
+      const ts = this.seats[eseat.seatIndex];
+      if (!ts || !ts.username) continue;
+      if (reachedShowdown || ts.showCardsAtShowdown) {
+        shownHands.push({
+          seatIndex: eseat.seatIndex,
+          playerId: eseat.playerId,
+          username: ts.username,
+          cards: eseat.holeCards,
+          handDescription: this.descrFor(eseat.seatIndex),
+        });
       }
     }
 
@@ -532,11 +535,16 @@ export class Table {
     this.events.onHandFinished(this, payload);
     this.events.onStateChange(this);
 
-    // Schedule auto-start of next hand if eligible.
+    // Schedule auto-start of next hand if eligible. The 8s delay gives the
+    // showdown overlay time to land — the client also exposes a "Deal now"
+    // button (table:dealNow) so anyone seated can skip ahead.
     if (this.canStartHand()) {
       if (this.nextHandTimer) clearTimeout(this.nextHandTimer);
+      const delayMs = 8000;
+      this.nextHandStartsAt = Date.now() + delayMs;
       this.nextHandTimer = setTimeout(() => {
         this.nextHandTimer = null;
+        this.nextHandStartsAt = null;
         if (this.canStartHand()) {
           try {
             this.startHand();
@@ -544,7 +552,28 @@ export class Table {
             console.error("[table] auto-start failed:", err);
           }
         }
-      }, 2500);
+      }, delayMs);
+    }
+  }
+
+  /**
+   * Cancel the auto-start timer and start the next hand immediately if
+   * eligible. Returns whether a hand was actually dealt; safe to call when
+   * no hand is pending.
+   */
+  dealNextHandNow(): boolean {
+    if (this.engine) return false;
+    if (!this.nextHandTimer) return false;
+    clearTimeout(this.nextHandTimer);
+    this.nextHandTimer = null;
+    this.nextHandStartsAt = null;
+    if (!this.canStartHand()) return false;
+    try {
+      this.startHand();
+      return true;
+    } catch (err) {
+      console.error("[table] dealNextHandNow failed:", err);
+      return false;
     }
   }
 
@@ -652,6 +681,7 @@ export class Table {
       handNumber: this.handNumber,
       actionDeadline: this.actionDeadline,
       lastHand: this.lastHand,
+      nextHandStartsAt: this.nextHandStartsAt,
     };
   }
 

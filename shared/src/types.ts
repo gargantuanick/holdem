@@ -101,6 +101,8 @@ export interface PublicTableState {
   actionDeadline: number | null; // epoch ms, when current actor times out
   // last completed hand summary, for table panel
   lastHand: HandFinishedPayload | null;
+  /** Epoch ms when the next hand will auto-deal. null if no hand pending. */
+  nextHandStartsAt: number | null;
 }
 
 export interface HandFinishedPayload {
@@ -178,6 +180,10 @@ export interface ClientToServerEvents {
   "table:action": (args: { tableId: string; action: PlayerAction }) => void;
   "table:chat": (args: { tableId: string; message: string }) => void;
   "table:showCards": (args: { tableId: string }) => void;
+  "table:dealNow": (
+    args: { tableId: string },
+    cb?: (res: { ok: true } | { ok: false; error: string }) => void,
+  ) => void;
   "auth:login": (
     args: { username: string },
     cb: (

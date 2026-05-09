@@ -64,6 +64,13 @@ export interface TableEvents {
 }
 
 const DEFAULT_TURN_MS = 30_000;
+/**
+ * Delay between street reveals during a paced all-in runout. Tuned to feel
+ * like a real dealer pausing on each board card without dragging the table
+ * to a halt — three streets at this pace adds ~3.6s before the showdown
+ * overlay lands, which still lands well inside the 8s next-hand timer.
+ */
+const RUNOUT_STEP_MS = 1_200;
 
 export class Table {
   readonly config: TableConfig;
@@ -79,6 +86,8 @@ export class Table {
   /** Epoch ms the auto-start fires at; mirrored to clients for the countdown. */
   nextHandStartsAt: number | null = null;
   private actionTimer: NodeJS.Timeout | null = null;
+  /** Pending step of the paced all-in runout (one timer per street reveal). */
+  private runoutTimer: NodeJS.Timeout | null = null;
   /** Disconnect grace timers per playerId; if not back in time, auto-fold + stand up. */
   private disconnectTimers = new Map<number, NodeJS.Timeout>();
   /** Test hook: rng used by HandEngine. */
@@ -180,6 +189,7 @@ export class Table {
    */
   abortHand(): void {
     this.clearActionTimer();
+    this.clearRunoutTimer();
     if (this.nextHandTimer) {
       clearTimeout(this.nextHandTimer);
       this.nextHandTimer = null;
@@ -360,6 +370,7 @@ export class Table {
       this.dealerSeatIndex,
       { smallBlind: this.config.smallBlind, bigBlind: this.config.bigBlind },
       this.rng,
+      { pacedRunout: true },
     );
 
     // Snapshot hole cards & stacks into table seats.
@@ -372,7 +383,14 @@ export class Table {
       ts.totalCommitted = eseat.totalCommitted;
     }
     this.lastHand = null;
-    this.scheduleActionTimer();
+    // Heads-up SB-shorter-than-blind edge case: the engine can land in
+    // pendingRunout state at construction (everyone all-in from posting).
+    // Same scheduling path as a mid-hand all-in.
+    if (this.engine.pendingRunout) {
+      this.scheduleRunoutStep();
+    } else {
+      this.scheduleActionTimer();
+    }
     this.events.onStateChange(this);
   }
 
@@ -398,8 +416,14 @@ export class Table {
       at: Date.now(),
     };
     // If the street changed (action closed the round), wipe everyone's
-    // lastAction — the new street starts fresh.
-    if (this.engine.street !== streetBeforeAction) {
+    // lastAction — the new street starts fresh. Exception: when the action
+    // sent us into a paced all-in runout, keep the pills up so viewers see
+    // who just shoved (and what called) while the board reveals card by
+    // card. They'll be cleared by the next hand's per-hand reset.
+    if (
+      this.engine.street !== streetBeforeAction &&
+      !this.engine.pendingRunout
+    ) {
       for (const s of this.seats) s.lastAction = null;
       seat.lastAction = null;
     }
@@ -407,6 +431,11 @@ export class Table {
 
     if (this.engine.phase === "complete") {
       this.finishHand();
+    } else if (this.engine.pendingRunout) {
+      this.clearActionTimer();
+      this.actionDeadline = null;
+      this.scheduleRunoutStep();
+      this.events.onStateChange(this);
     } else {
       this.scheduleActionTimer();
       this.events.onStateChange(this);
@@ -452,6 +481,11 @@ export class Table {
     this.syncFromEngine();
     if (this.engine.phase === "complete") {
       this.finishHand();
+    } else if (this.engine.pendingRunout) {
+      this.clearActionTimer();
+      this.actionDeadline = null;
+      this.scheduleRunoutStep();
+      this.events.onStateChange(this);
     } else {
       this.scheduleActionTimer();
       this.events.onStateChange(this);
@@ -521,6 +555,7 @@ export class Table {
     };
     this.lastHand = payload;
     this.clearActionTimer();
+    this.clearRunoutTimer();
     this.actionDeadline = null;
 
     // Apply any deferred sit-out toggles now that the hand is done. This
@@ -608,6 +643,43 @@ export class Table {
     }
   }
 
+  /**
+   * Drive the paced all-in runout: each step deals one street, broadcasts
+   * the new community cards, and either schedules the next step or finishes
+   * the hand. The delay is long enough to read the new card but short
+   * enough to keep the table moving.
+   */
+  private scheduleRunoutStep() {
+    if (this.runoutTimer) return;
+    if (!this.engine || !this.engine.pendingRunout) return;
+    this.runoutTimer = setTimeout(() => {
+      this.runoutTimer = null;
+      const eng = this.engine;
+      if (!eng || !eng.pendingRunout) return;
+      try {
+        eng.continueRunout();
+      } catch (err) {
+        console.error("[table] continueRunout failed:", err);
+        this.abortHand();
+        return;
+      }
+      this.syncFromEngine();
+      if (eng.phase === "complete") {
+        this.finishHand();
+        return;
+      }
+      this.events.onStateChange(this);
+      if (eng.pendingRunout) this.scheduleRunoutStep();
+    }, RUNOUT_STEP_MS);
+  }
+
+  private clearRunoutTimer() {
+    if (this.runoutTimer) {
+      clearTimeout(this.runoutTimer);
+      this.runoutTimer = null;
+    }
+  }
+
   startDisconnectTimer(playerId: number, ms: number, onTimeout: () => void) {
     const existing = this.disconnectTimers.get(playerId);
     if (existing) clearTimeout(existing);
@@ -628,6 +700,7 @@ export class Table {
 
   destroy() {
     this.clearActionTimer();
+    this.clearRunoutTimer();
     if (this.nextHandTimer) clearTimeout(this.nextHandTimer);
     for (const t of this.disconnectTimers.values()) clearTimeout(t);
     this.disconnectTimers.clear();
@@ -640,12 +713,19 @@ export class Table {
    * cards are included; everyone else's are stripped.
    */
   publicState(forPlayerId: number | null): PublicTableState {
+    // Reveal every live player's hole cards while the all-in runout is
+    // pending. This is the moment in live poker where the dealer says "let's
+    // see them" before running the board — without this, viewers (and the
+    // all-in players themselves) see face-down cards while the river falls,
+    // which is the strangeness users report. Cards stay revealed through the
+    // showdown overlay since shownHands carries them forward.
+    const revealAllLive = !!this.engine && this.engine.pendingRunout;
     const seats: PublicSeat[] = this.seats.map((s) => {
       const showHole =
-        forPlayerId !== null &&
-        s.playerId === forPlayerId &&
         s.holeCards !== null &&
-        !s.hasFolded;
+        !s.hasFolded &&
+        (revealAllLive ||
+          (forPlayerId !== null && s.playerId === forPlayerId));
       return {
         seatIndex: s.seatIndex,
         playerId: s.playerId,
@@ -682,6 +762,7 @@ export class Table {
       actionDeadline: this.actionDeadline,
       lastHand: this.lastHand,
       nextHandStartsAt: this.nextHandStartsAt,
+      inRunout: !!this.engine && this.engine.pendingRunout,
     };
   }
 

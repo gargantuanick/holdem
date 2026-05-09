@@ -103,6 +103,13 @@ export interface PublicTableState {
   lastHand: HandFinishedPayload | null;
   /** Epoch ms when the next hand will auto-deal. null if no hand pending. */
   nextHandStartsAt: number | null;
+  /**
+   * True when the hand is being run out because the remaining live players
+   * are all-in. The server reveals one street at a time on a timer; the UI
+   * should label the moment ("All-in — running it out") and show every live
+   * player's hole cards face up so the runout has visible drama.
+   */
+  inRunout: boolean;
 }
 
 export interface HandFinishedPayload {

@@ -71,6 +71,13 @@ export function Seat({
             <PlayingCard card={seat.holeCards[0]} size="xl" />
             <PlayingCard card={seat.holeCards[1]} size="xl" />
           </>
+        ) : seat.holeCards ? (
+          // Opponent hole cards are exposed by the server during an all-in
+          // runout — flip them face up so the table can see what's racing.
+          <>
+            <PlayingCard card={seat.holeCards[0]} size="sm" />
+            <PlayingCard card={seat.holeCards[1]} size="sm" />
+          </>
         ) : revealedCards ? (
           <>
             <PlayingCard card={revealedCards[0]} size="sm" />

@@ -41,10 +41,18 @@ export function TableCanvas({
 
       {/* Community cards + pot in the center */}
       <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-3 pointer-events-none">
-        <div className="text-[10px] uppercase tracking-widest text-white/40">
+        <div
+          className={`text-[10px] uppercase tracking-widest font-bold ${
+            state.inRunout
+              ? "text-yellow-300 animate-pulse"
+              : "text-white/40"
+          }`}
+        >
           {state.street === "idle"
             ? "waiting"
-            : `Hand #${state.handNumber} · ${state.street}`}
+            : state.inRunout
+              ? `All-in · running it out (${state.street})`
+              : `Hand #${state.handNumber} · ${state.street}`}
         </div>
         <div className="flex gap-1 sm:gap-1.5">
           {Array.from({ length: 5 }).map((_, i) => {

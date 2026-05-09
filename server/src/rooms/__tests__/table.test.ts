@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { Table } from "../table.js";
 
 const noopEvents = {
@@ -143,6 +143,66 @@ describe("Table — hand lifecycle", () => {
     expect(result.deferred).toBe(true);
     // Seat is still there until hand ends
     expect(t.findSeatByPlayer(2)).not.toBeNull();
+  });
+});
+
+describe("Table — paced all-in runout", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("reveals opponent hole cards in publicState while runout is pending", () => {
+    const t = new Table(cfg, noopEvents);
+    t.sitDown({ playerId: 1, username: "a", buyIn: 200 });
+    t.sitDown({ playerId: 2, username: "b", buyIn: 200 });
+    t.setReady(1, true);
+    t.setReady(2, true);
+    t.startHand();
+    // Heads-up: seat 0 (dealer/SB) acts first.
+    const firstActor = t.engine!.toActSeatIndex!;
+    const secondActor = firstActor === 0 ? 1 : 0;
+    t.applyAction(t.seats[firstActor]!.playerId!, { type: "allin" });
+    t.applyAction(t.seats[secondActor]!.playerId!, { type: "call" });
+    expect(t.engine).not.toBeNull();
+    expect(t.engine!.pendingRunout).toBe(true);
+    // Both players' hole cards visible to each other while running it out.
+    const stateForP1 = t.publicState(1);
+    const oppForP1 = stateForP1.seats.find((s) => s.playerId === 2)!;
+    expect(oppForP1.holeCards).not.toBeNull();
+    expect(stateForP1.inRunout).toBe(true);
+  });
+
+  it("steps through streets on a timer and finishes the hand", () => {
+    let finishedPayload: import("@holdem/shared").HandFinishedPayload | null =
+      null;
+    const t = new Table(cfg, {
+      onStateChange: () => {},
+      onHandFinished: (_, p) => {
+        finishedPayload = p;
+      },
+      onActionTimeout: () => {},
+    });
+    t.sitDown({ playerId: 1, username: "a", buyIn: 200 });
+    t.sitDown({ playerId: 2, username: "b", buyIn: 200 });
+    t.setReady(1, true);
+    t.setReady(2, true);
+    t.startHand();
+    const firstActor = t.engine!.toActSeatIndex!;
+    const secondActor = firstActor === 0 ? 1 : 0;
+    t.applyAction(t.seats[firstActor]!.playerId!, { type: "allin" });
+    t.applyAction(t.seats[secondActor]!.playerId!, { type: "call" });
+    // Advance through every street's timer plus the final showdown step.
+    vi.advanceTimersByTime(1_500);
+    vi.advanceTimersByTime(1_500);
+    vi.advanceTimersByTime(1_500);
+    vi.advanceTimersByTime(1_500);
+    expect(t.engine).toBeNull();
+    expect(finishedPayload).not.toBeNull();
+    expect(finishedPayload!.communityCards).toHaveLength(5);
+    expect(finishedPayload!.winners.length).toBeGreaterThan(0);
   });
 });
 

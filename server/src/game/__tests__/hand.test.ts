@@ -202,6 +202,63 @@ describe("HandEngine — side pots from all-ins", () => {
   });
 });
 
+describe("HandEngine — paced runout", () => {
+  it("pacedRunout pauses between streets and resumes via continueRunout", () => {
+    // Heads-up shove preflop, opponent calls. With pacedRunout the engine
+    // should deal one street at a time instead of jumping to showdown.
+    const eng = new HandEngine(
+      mkSeats([200, 200]),
+      0,
+      { smallBlind: 5, bigBlind: 10 },
+      undefined,
+      { pacedRunout: true },
+    );
+    eng.applyAction(0, { type: "allin" }); // dealer/SB shoves
+    eng.applyAction(1, { type: "call" }); // BB calls
+    // First pause: flop dealt, no turn yet.
+    expect(eng.pendingRunout).toBe(true);
+    expect(eng.community).toHaveLength(3);
+    expect(eng.phase).toBe("betting");
+
+    eng.continueRunout();
+    expect(eng.pendingRunout).toBe(true);
+    expect(eng.community).toHaveLength(4);
+
+    eng.continueRunout();
+    expect(eng.pendingRunout).toBe(true);
+    expect(eng.community).toHaveLength(5);
+
+    eng.continueRunout();
+    expect(eng.pendingRunout).toBe(false);
+    expect(eng.phase).toBe("complete");
+    expect(eng.pendingWinners.length).toBeGreaterThan(0);
+  });
+
+  it("continueRunout throws when not paused", () => {
+    const eng = new HandEngine(
+      mkSeats([200, 200]),
+      0,
+      { smallBlind: 5, bigBlind: 10 },
+      undefined,
+      { pacedRunout: true },
+    );
+    expect(() => eng.continueRunout()).toThrow();
+  });
+
+  it("default (instant) runout still completes synchronously", () => {
+    const eng = new HandEngine(
+      mkSeats([200, 200]),
+      0,
+      { smallBlind: 5, bigBlind: 10 },
+    );
+    eng.applyAction(0, { type: "allin" });
+    eng.applyAction(1, { type: "call" });
+    expect(eng.pendingRunout).toBe(false);
+    expect(eng.phase).toBe("complete");
+    expect(eng.community).toHaveLength(5);
+  });
+});
+
 describe("HandEngine — showdown with rigged deck", () => {
   it("better hand wins the pot at showdown", () => {
     // We can't directly inject the deck, but we can use a deterministic RNG.

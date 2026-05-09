@@ -60,6 +60,16 @@ export interface PendingWinner {
 
 export type HandPhase = "betting" | "showdown" | "complete";
 
+export interface HandEngineOptions {
+  /**
+   * When true, the engine pauses after dealing each runout street so the
+   * host can broadcast the intermediate state and pace the reveal in the
+   * UI. The host resumes via `continueRunout()`. Default false preserves
+   * the synchronous-runout behavior used by tests.
+   */
+  pacedRunout?: boolean;
+}
+
 export class HandEngine {
   readonly seats: HandSeatState[]; // seats actually dealt in
   readonly config: HandConfig;
@@ -74,16 +84,27 @@ export class HandEngine {
   phase: HandPhase = "betting";
   pots: ComputedPot[] = [];
   pendingWinners: PendingWinner[] = [];
+  /**
+   * True when a paced all-in runout is awaiting `continueRunout()`. The hand
+   * has just dealt a street's cards but cannot accept any action because all
+   * remaining live seats are all-in (or there's only one acting seat with
+   * nobody to bet against). The host should broadcast the intermediate
+   * state, then resume on a timer so users see flop / turn / river reveal
+   * one at a time. Always false when `pacedRunout` is disabled.
+   */
+  pendingRunout = false;
 
   private deck: Card[];
   /** Seat index of the last aggressor; betting closes when action returns to them. */
   private lastAggressor: number | null = null;
+  private readonly pacedRunout: boolean;
 
   constructor(
     seatInputs: HandSeatInput[],
     dealerSeatIndex: number,
     config: HandConfig,
     rng: () => number = Math.random,
+    opts: HandEngineOptions = {},
   ) {
     if (seatInputs.length < 2) throw new Error("need >= 2 players to start hand");
     if (!seatInputs.find((s) => s.seatIndex === dealerSeatIndex)) {
@@ -93,6 +114,7 @@ export class HandEngine {
     this.dealerSeatIndex = dealerSeatIndex;
     this.minRaise = config.bigBlind;
     this.deck = shuffle(freshDeck(), rng);
+    this.pacedRunout = opts.pacedRunout ?? false;
 
     // Deal hole cards in dealer-clockwise order, starting from player after dealer.
     // For tests/UI we don't care about deal order — just give each seat 2 cards.
@@ -488,6 +510,12 @@ export class HandEngine {
     // If <=1 can act, auto-advance again (run-out for all-in scenarios).
     if (canAct <= 1) {
       this.toActSeatIndex = null;
+      if (this.pacedRunout) {
+        // Pause so the host can broadcast this street's reveal before the
+        // next card lands. The host resumes via continueRunout().
+        this.pendingRunout = true;
+        return;
+      }
       // Recurse to deal next street(s) immediately.
       this.advanceStreet();
       return;
@@ -498,6 +526,17 @@ export class HandEngine {
       // Nobody can act; advance again.
       this.advanceStreet();
     }
+  }
+
+  /**
+   * Advance one street during a paced all-in runout. Either pendingRunout
+   * stays true (more streets to come) or phase flips to "complete" (showdown
+   * was reached). Throws if not currently paused.
+   */
+  continueRunout(): void {
+    if (!this.pendingRunout) throw new Error("not in pending runout");
+    this.pendingRunout = false;
+    this.advanceStreet();
   }
 
   private goToShowdown(): void {

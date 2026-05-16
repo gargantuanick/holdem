@@ -19,11 +19,17 @@ export function PlayingCard({
   size = "md",
   faceDown = false,
   glow = false,
+  highlight = false,
+  dim = false,
 }: {
   card?: CardT | null;
   size?: "sm" | "md" | "lg" | "xl";
   faceDown?: boolean;
   glow?: boolean;
+  /** Pulsing gold ring for the 5 cards that make the winning hand. */
+  highlight?: boolean;
+  /** Fade non-winning cards while a hand is being revealed. */
+  dim?: boolean;
 }) {
   // Mobile-first sizes. Defaults are tuned to fit 5 community cards on a
   // 360px-wide phone with margins; sm: (640px+) scales each tier up.
@@ -44,7 +50,7 @@ export function PlayingCard({
   if (faceDown || !card) {
     return (
       <div
-        className={`${sizes[size]} rounded-md bg-gradient-to-br from-blue-700 to-blue-900 border border-white/30 shadow-md flex items-center justify-center`}
+        className={`${sizes[size]} rounded-md bg-gradient-to-br from-blue-700 to-blue-900 border border-white/30 shadow-md flex items-center justify-center ${dim ? "opacity-50" : ""}`}
         aria-label="face-down card"
       >
         <div className="w-2/3 h-2/3 rounded-sm border border-white/20" />
@@ -55,7 +61,7 @@ export function PlayingCard({
   const suit = card[1] as keyof typeof SUIT_GLYPH;
   return (
     <div
-      className={`${sizes[size]} relative rounded-md bg-white shadow-md border border-black/20 overflow-hidden animate-card-deal ${glow ? "ring-2 ring-chip-gold" : ""}`}
+      className={`${sizes[size]} relative rounded-md bg-white shadow-md border border-black/20 overflow-hidden animate-card-deal ${glow ? "ring-2 ring-chip-gold" : ""} ${highlight ? "z-10 animate-card-win-pulse" : ""} ${dim ? "opacity-40 saturate-50" : ""}`}
     >
       <div
         className={`absolute left-1 top-1 leading-none font-bold ${SUIT_COLOR[suit]}`}

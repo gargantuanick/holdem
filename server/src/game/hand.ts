@@ -56,6 +56,8 @@ export interface PendingWinner {
   amount: number;
   handDescription: string;
   potIndex: number;
+  /** 5-card best hand from the 7-card set; null for uncontested wins. */
+  bestCards: Card[] | null;
 }
 
 export type HandPhase = "betting" | "showdown" | "complete";
@@ -520,6 +522,7 @@ export class HandEngine {
         amount: total,
         handDescription: "uncontested",
         potIndex: 0,
+        bestCards: null,
       },
     ];
   }
@@ -545,12 +548,14 @@ export class HandEngine {
       if (eligibleSeats.length === 1) {
         const w = eligibleSeats[0]!;
         w.stack += pot.amount;
+        const { descr, best } = this.handDescrAndBest(w);
         winners.push({
           seatIndex: w.seatIndex,
           playerId: w.playerId,
           amount: pot.amount,
-          handDescription: this.handDescr(w),
+          handDescription: descr,
           potIndex: potIdx,
+          bestCards: best,
         });
         continue;
       }
@@ -558,7 +563,8 @@ export class HandEngine {
         ...s.holeCards,
         ...this.community,
       ]);
-      const { winnerIndexes, descriptions } = winnersFromSevenCardSets(sets);
+      const { winnerIndexes, descriptions, bestCards } =
+        winnersFromSevenCardSets(sets);
       const share = Math.floor(pot.amount / winnerIndexes.length);
       const remainder = pot.amount - share * winnerIndexes.length;
       // Distribute remainder chips clockwise from dealer to keep determinism.
@@ -581,16 +587,20 @@ export class HandEngine {
           amount: amt,
           handDescription: descriptions[idxInOriginal] ?? "",
           potIndex: potIdx,
+          bestCards: bestCards[idxInOriginal] ?? null,
         });
       }
     }
     this.pendingWinners = winners;
   }
 
-  private handDescr(seat: HandSeatState): string {
+  private handDescrAndBest(seat: HandSeatState): {
+    descr: string;
+    best: Card[] | null;
+  } {
     const set = [...seat.holeCards, ...this.community];
-    const { descriptions } = winnersFromSevenCardSets([set]);
-    return descriptions[0] ?? "";
+    const { descriptions, bestCards } = winnersFromSevenCardSets([set]);
+    return { descr: descriptions[0] ?? "", best: bestCards[0] ?? null };
   }
 
   private clockwiseDistanceFromDealer(seatIndex: number): number {

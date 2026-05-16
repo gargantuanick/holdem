@@ -61,6 +61,12 @@ export interface Winner {
   handDescription: string;
   potIndex: number; // 0 = main pot, 1+ = side pots
   showCards: [Card, Card] | null; // null if mucked
+  /**
+   * The 5 cards making up this winner's best hand (subset of their 2 hole
+   * + 5 community). Null on uncontested wins where no evaluation ran.
+   * Used by the client to glow the winning cards on the table.
+   */
+  bestCards: Card[] | null;
 }
 
 export interface HandHistoryEntry {

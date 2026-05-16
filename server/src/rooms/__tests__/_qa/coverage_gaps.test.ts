@@ -208,8 +208,8 @@ describe("computeStatsDeltas with multi-pot showdowns", () => {
     const fakePayload = {
       ...t.lastHand!,
       winners: [
-        { seatIndex: 0, playerId: 1, username: "a", amount: 50, handDescription: "x", potIndex: 0, showCards: null, bestCards: null },
-        { seatIndex: 0, playerId: 1, username: "a", amount: 200, handDescription: "x", potIndex: 1, showCards: null, bestCards: null },
+        { seatIndex: 0, playerId: 1, username: "a", amount: 50, handDescription: "x", potIndex: 0, showCards: null, bestCards: null, uncalled: false },
+        { seatIndex: 0, playerId: 1, username: "a", amount: 200, handDescription: "x", potIndex: 1, showCards: null, bestCards: null, uncalled: false },
       ],
     };
     const deltas = computeStatsDeltas(t, fakePayload);

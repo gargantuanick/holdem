@@ -288,7 +288,7 @@ export function TablePage() {
               localPlayerId={localPlayerId}
               lastHandWinners={
                 lastHand && lastHand.handNumber === state.handNumber
-                  ? lastHand.winners
+                  ? lastHand.winners.filter((w) => !w.uncalled)
                   : []
               }
               shownHands={
@@ -501,7 +501,7 @@ export function TablePage() {
 function buildWinningCardSet(payload: HandFinishedPayload): Set<CardT> | null {
   const set = new Set<CardT>();
   for (const w of payload.winners) {
-    if (!w.bestCards) continue;
+    if (w.uncalled || !w.bestCards) continue;
     for (const c of w.bestCards) set.add(c);
   }
   return set.size > 0 ? set : null;

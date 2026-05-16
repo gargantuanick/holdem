@@ -67,6 +67,14 @@ export interface Winner {
    * Used by the client to glow the winning cards on the table.
    */
   bestCards: Card[] | null;
+  /**
+   * True when this entry is just a refund of uncalled chips (a side pot
+   * that had only one eligible player because everyone else was already
+   * all-in for less). The player didn't beat anyone for these chips — the
+   * UI should not display them as a "winner" and stats should not count
+   * the refund as a pot won.
+   */
+  uncalled: boolean;
 }
 
 export interface HandHistoryEntry {

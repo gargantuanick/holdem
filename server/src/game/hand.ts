@@ -58,6 +58,12 @@ export interface PendingWinner {
   potIndex: number;
   /** 5-card best hand from the 7-card set; null for uncontested wins. */
   bestCards: Card[] | null;
+  /**
+   * True when this pot had only one eligible seat — i.e. it's the
+   * uncalled portion of a bet the all-in opponent(s) couldn't match.
+   * Chips still get credited, but the player did not beat anyone for them.
+   */
+  uncalled: boolean;
 }
 
 export type HandPhase = "betting" | "showdown" | "complete";
@@ -523,6 +529,7 @@ export class HandEngine {
         handDescription: "uncontested",
         potIndex: 0,
         bestCards: null,
+        uncalled: false,
       },
     ];
   }
@@ -546,16 +553,20 @@ export class HandEngine {
         .filter(Boolean);
       if (eligibleSeats.length === 0) continue;
       if (eligibleSeats.length === 1) {
+        // Only one eligible seat — this side pot is the uncalled portion of
+        // a bet that no opponent could match. Credit the chips back but
+        // mark the entry as uncalled so the UI/stats treat it as a refund,
+        // not a "win".
         const w = eligibleSeats[0]!;
         w.stack += pot.amount;
-        const { descr, best } = this.handDescrAndBest(w);
         winners.push({
           seatIndex: w.seatIndex,
           playerId: w.playerId,
           amount: pot.amount,
-          handDescription: descr,
+          handDescription: "",
           potIndex: potIdx,
-          bestCards: best,
+          bestCards: null,
+          uncalled: true,
         });
         continue;
       }
@@ -588,19 +599,11 @@ export class HandEngine {
           handDescription: descriptions[idxInOriginal] ?? "",
           potIndex: potIdx,
           bestCards: bestCards[idxInOriginal] ?? null,
+          uncalled: false,
         });
       }
     }
     this.pendingWinners = winners;
-  }
-
-  private handDescrAndBest(seat: HandSeatState): {
-    descr: string;
-    best: Card[] | null;
-  } {
-    const set = [...seat.holeCards, ...this.community];
-    const { descriptions, bestCards } = winnersFromSevenCardSets([set]);
-    return { descr: descriptions[0] ?? "", best: bestCards[0] ?? null };
   }
 
   private clockwiseDistanceFromDealer(seatIndex: number): number {

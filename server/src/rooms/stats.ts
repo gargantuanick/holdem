@@ -28,17 +28,27 @@ export function computeStatsDeltas(
     const winsByThisPlayer = payload.winners.filter(
       (w) => w.playerId === playerId,
     );
-    const grossWon = winsByThisPlayer.reduce((a, w) => a + w.amount, 0);
-    const biggestPot = winsByThisPlayer.reduce(
+    // Uncalled-portion refunds are not "winnings" — the player didn't beat
+    // anyone to receive them. Strip them from the win-side stats so
+    // "hands won", "biggest pot won" and "total chips won" only reflect
+    // actually contested wins. They still reduce the loss side, since the
+    // refund cancels out the matching contribution the player would
+    // otherwise have lost.
+    const refunded = winsByThisPlayer
+      .filter((w) => w.uncalled)
+      .reduce((a, w) => a + w.amount, 0);
+    const contestedWins = winsByThisPlayer.filter((w) => !w.uncalled);
+    const grossWon = contestedWins.reduce((a, w) => a + w.amount, 0);
+    const biggestPot = contestedWins.reduce(
       (max, w) => Math.max(max, w.amount),
       0,
     );
     const contributed = seat.totalCommitted;
-    // grossLost is what they put in minus what they got back, floored at 0.
-    const grossLost = Math.max(0, contributed - grossWon);
+    const effectiveContribution = contributed - refunded;
+    const grossLost = Math.max(0, effectiveContribution - grossWon);
     out.push({
       playerId,
-      netDelta: grossWon - contributed,
+      netDelta: grossWon - effectiveContribution,
       grossWon,
       grossLost,
       wonHand: grossWon > 0,

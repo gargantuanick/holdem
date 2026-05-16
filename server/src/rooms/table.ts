@@ -9,6 +9,7 @@ import type {
   Winner,
 } from "@holdem/shared";
 import { HandEngine, type HandSeatInput } from "../game/hand.js";
+import { winnersFromSevenCardSets } from "../game/evaluate.js";
 
 /**
  * A Table holds:
@@ -510,6 +511,7 @@ export class Table {
         potIndex: w.potIndex,
         showCards: shown ? shown.cards : null,
         bestCards: w.bestCards,
+        uncalled: w.uncalled,
       };
     });
 
@@ -582,8 +584,18 @@ export class Table {
     if (!this.engine) return "";
     const eseat = this.engine.getSeat(seatIndex);
     if (!eseat) return "";
-    const w = this.engine.pendingWinners.find((x) => x.seatIndex === seatIndex);
-    return w?.handDescription ?? "";
+    // Prefer the per-pot description (set during pot evaluation), but fall
+    // back to evaluating the player's hand directly — handles seats that
+    // showed at showdown but didn't win any contested pot, plus players
+    // whose only winnings entry was an uncalled-refund (no description).
+    const w = this.engine.pendingWinners.find(
+      (x) => x.seatIndex === seatIndex && x.handDescription,
+    );
+    if (w) return w.handDescription;
+    const { descriptions } = winnersFromSevenCardSets([
+      [...eseat.holeCards, ...this.engine.community],
+    ]);
+    return descriptions[0] ?? "";
   }
 
   // === Timers ===

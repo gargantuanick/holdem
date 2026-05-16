@@ -12,6 +12,10 @@ interface Props {
   actionDeadline: number | null;
   winner: Winner | null;
   revealedCards: [CardT, CardT] | null;
+  /** Cards that make up the winning hand — used to glow hole cards too. */
+  winningCardSet?: Set<CardT> | null;
+  /** Fade this seat during the showdown freeze if they didn't win. */
+  dimDuringShowdown?: boolean;
   onClickName?: () => void;
 }
 
@@ -23,6 +27,8 @@ export function Seat({
   actionDeadline,
   winner,
   revealedCards,
+  winningCardSet,
+  dimDuringShowdown,
   onClickName,
 }: Props) {
   if (seat.playerId === null) {
@@ -43,6 +49,7 @@ export function Seat({
         ${seat.hasFolded ? "opacity-50" : ""}
         ${seat.sittingOut ? "ring-2 ring-yellow-500/70" : ""}
         ${dimmedForOut ? "opacity-60 grayscale" : ""}
+        ${dimDuringShowdown ? "opacity-40 saturate-50" : ""}
       `}
     >
       {isDealer && (
@@ -68,13 +75,29 @@ export function Seat({
       >
         {isLocal && seat.holeCards ? (
           <>
-            <PlayingCard card={seat.holeCards[0]} size="xl" />
-            <PlayingCard card={seat.holeCards[1]} size="xl" />
+            <PlayingCard
+              card={seat.holeCards[0]}
+              size="xl"
+              highlight={!!winningCardSet?.has(seat.holeCards[0])}
+            />
+            <PlayingCard
+              card={seat.holeCards[1]}
+              size="xl"
+              highlight={!!winningCardSet?.has(seat.holeCards[1])}
+            />
           </>
         ) : revealedCards ? (
           <>
-            <PlayingCard card={revealedCards[0]} size="sm" />
-            <PlayingCard card={revealedCards[1]} size="sm" />
+            <PlayingCard
+              card={revealedCards[0]}
+              size="sm"
+              highlight={!!winningCardSet?.has(revealedCards[0])}
+            />
+            <PlayingCard
+              card={revealedCards[1]}
+              size="sm"
+              highlight={!!winningCardSet?.has(revealedCards[1])}
+            />
           </>
         ) : seat.hasCards ? (
           <>

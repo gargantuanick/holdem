@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import type { Card as CardT, HandFinishedPayload } from "@holdem/shared";
 import { getSocket } from "../lib/socket";
 import { useGameState } from "../hooks/useGameState";
 import { useSession } from "../hooks/useSession";
@@ -285,11 +286,25 @@ export function TablePage() {
             <TableCanvas
               state={state}
               localPlayerId={localPlayerId}
-              lastHandWinners={lastHand?.winners ?? []}
+              lastHandWinners={
+                lastHand && lastHand.handNumber === state.handNumber
+                  ? lastHand.winners
+                  : []
+              }
               shownHands={
                 lastHand && lastHand.handNumber === state.handNumber
                   ? lastHand.shownHands
                   : []
+              }
+              showdownCommunityCards={
+                lastHand && lastHand.handNumber === state.handNumber
+                  ? lastHand.communityCards
+                  : null
+              }
+              winningCardSet={
+                lastHand && lastHand.handNumber === state.handNumber
+                  ? buildWinningCardSet(lastHand)
+                  : null
               }
               onProfileClick={(u) => setProfileOf(u)}
             />
@@ -481,6 +496,15 @@ export function TablePage() {
       )}
     </div>
   );
+}
+
+function buildWinningCardSet(payload: HandFinishedPayload): Set<CardT> | null {
+  const set = new Set<CardT>();
+  for (const w of payload.winners) {
+    if (!w.bestCards) continue;
+    for (const c of w.bestCards) set.add(c);
+  }
+  return set.size > 0 ? set : null;
 }
 
 function RebuyModal({

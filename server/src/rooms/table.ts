@@ -509,6 +509,7 @@ export class Table {
         handDescription: w.handDescription,
         potIndex: w.potIndex,
         showCards: shown ? shown.cards : null,
+        bestCards: w.bestCards,
       };
     });
 
@@ -535,12 +536,12 @@ export class Table {
     this.events.onHandFinished(this, payload);
     this.events.onStateChange(this);
 
-    // Schedule auto-start of next hand if eligible. The 8s delay gives the
+    // Schedule auto-start of next hand if eligible. The 5s delay gives the
     // showdown overlay time to land — the client also exposes a "Deal now"
     // button (table:dealNow) so anyone seated can skip ahead.
     if (this.canStartHand()) {
       if (this.nextHandTimer) clearTimeout(this.nextHandTimer);
-      const delayMs = 8000;
+      const delayMs = 5000;
       this.nextHandStartsAt = Date.now() + delayMs;
       this.nextHandTimer = setTimeout(() => {
         this.nextHandTimer = null;

@@ -54,10 +54,10 @@ export function GameStateProvider({ children }: { children: ReactNode }) {
     const onFinish = (p: HandFinishedPayload) => {
       setLastHand(p);
       // Safety net only — the overlay is normally dismissed when the next
-      // hand's state arrives (handNumber check in Table). 12s outlives the
-      // server's 8s auto-start and covers the "no next hand" case (everyone
+      // hand's state arrives (handNumber check in Table). 8s outlives the
+      // server's 5s auto-start and covers the "no next hand" case (everyone
       // busted, table heads-down).
-      setTimeout(() => setLastHand((cur) => (cur === p ? null : cur)), 12000);
+      setTimeout(() => setLastHand((cur) => (cur === p ? null : cur)), 8000);
     };
     const onErr = (msg: string) => {
       setErrorBanner(msg);

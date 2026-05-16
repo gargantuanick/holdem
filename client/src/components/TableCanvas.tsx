@@ -13,6 +13,17 @@ interface Props {
   localPlayerId: number | null;
   lastHandWinners: Winner[];
   shownHands: HandFinishedPayload["shownHands"];
+  /**
+   * Community cards to render if the engine has already wiped the live ones
+   * (i.e. the hand just ended). Lets us keep the board visible behind the
+   * showdown overlay so players can verify the winning cards.
+   */
+  showdownCommunityCards: CardT[] | null;
+  /**
+   * Set of winning cards (winners' 5-card best hand cards) to glow during
+   * the showdown freeze. Empty/null outside the showdown window.
+   */
+  winningCardSet: Set<CardT> | null;
   onProfileClick?: (username: string) => void;
 }
 
@@ -25,6 +36,8 @@ export function TableCanvas({
   localPlayerId,
   lastHandWinners,
   shownHands,
+  showdownCommunityCards,
+  winningCardSet,
   onProfileClick,
 }: Props) {
   // Order seats so the local player is at the bottom, then opponents going
@@ -32,6 +45,16 @@ export function TableCanvas({
   const seats = [...state.seats];
   const localIdx = seats.findIndex((s) => s.playerId === localPlayerId);
   const arranged = arrangeForBottomLocal(seats, localIdx);
+
+  // During the showdown freeze the engine has been torn down server-side, so
+  // state.communityCards is empty — fall back to the snapshot from the
+  // finished-hand payload so the board stays visible.
+  const community =
+    state.communityCards.length > 0
+      ? state.communityCards
+      : (showdownCommunityCards ?? []);
+  const isShowdownFreeze = !!showdownCommunityCards;
+  const winnerSeatSet = new Set(lastHandWinners.map((w) => w.seatIndex));
 
   return (
     <div className="relative w-full max-w-lg aspect-[3/4] max-h-full mx-auto">
@@ -42,15 +65,25 @@ export function TableCanvas({
       {/* Community cards + pot in the center */}
       <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-3 pointer-events-none">
         <div className="text-[10px] uppercase tracking-widest text-white/40">
-          {state.street === "idle"
-            ? "waiting"
-            : `Hand #${state.handNumber} · ${state.street}`}
+          {isShowdownFreeze
+            ? `Hand #${state.handNumber} · showdown`
+            : state.street === "idle"
+              ? "waiting"
+              : `Hand #${state.handNumber} · ${state.street}`}
         </div>
         <div className="flex gap-1 sm:gap-1.5">
           {Array.from({ length: 5 }).map((_, i) => {
-            const card = state.communityCards[i];
+            const card = community[i];
+            const isWinning = !!card && !!winningCardSet?.has(card);
+            const dim = isShowdownFreeze && !isWinning && !!winningCardSet;
             return card ? (
-              <PlayingCard key={i} card={card} size="lg" />
+              <PlayingCard
+                key={i}
+                card={card}
+                size="lg"
+                highlight={isWinning}
+                dim={dim}
+              />
             ) : (
               <div
                 key={i}
@@ -59,7 +92,7 @@ export function TableCanvas({
             );
           })}
         </div>
-        {state.totalPot > 0 && (
+        {state.totalPot > 0 && !isShowdownFreeze && (
           <div className="mt-1">
             <ChipStack amount={state.totalPot} />
           </div>
@@ -76,6 +109,12 @@ export function TableCanvas({
           lastHandWinners.find((w) => w.seatIndex === seat.seatIndex) ?? null;
         const revealed: [CardT, CardT] | null =
           shownHands.find((sh) => sh.seatIndex === seat.seatIndex)?.cards ?? null;
+        // During the showdown freeze, dim seats that didn't win so the
+        // winning seat reads as the obvious focus.
+        const dimDuringShowdown =
+          isShowdownFreeze &&
+          winnerSeatSet.size > 0 &&
+          !winnerSeatSet.has(seat.seatIndex);
         return (
           <div
             key={seat.seatIndex}
@@ -90,6 +129,8 @@ export function TableCanvas({
               actionDeadline={isToAct ? state.actionDeadline : null}
               winner={winner}
               revealedCards={revealed}
+              winningCardSet={winningCardSet}
+              dimDuringShowdown={dimDuringShowdown}
               onClickName={
                 seat.username && !seat.isBot
                   ? () => onProfileClick?.(seat.username!)
